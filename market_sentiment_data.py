@@ -27,7 +27,7 @@ def _setup_stdout_encoding():
             # 不在streamlit环境，可以安全修改
             try:
                 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='ignore')
-            except:
+            except Exception:
                 pass
 
 _setup_stdout_encoding()
@@ -356,7 +356,7 @@ class MarketSentimentDataFetcher:
                                 interpretation = "换手率偏低（2%-5%），交易相对清淡"
                             else:
                                 interpretation = "换手率很低（<2%），交易清淡"
-                        except:
+                        except Exception:
                             pass
                     
                     print(f"   [Akshare] ✅ 成功获取换手率: {turnover_rate}%")
@@ -398,7 +398,7 @@ class MarketSentimentDataFetcher:
                                     interpretation = "换手率偏低（2%-5%），交易相对清淡"
                                 else:
                                     interpretation = "换手率很低（<2%），交易清淡"
-                            except:
+                            except Exception:
                                 pass
                         
                         print(f"   [Tushare] ✅ 成功获取换手率: {turnover_rate}%")
@@ -507,14 +507,14 @@ class MarketSentimentDataFetcher:
             try:
                 limit_up_df = ak.stock_zt_pool_em(date=today)
                 limit_up_count = len(limit_up_df) if limit_up_df is not None and not limit_up_df.empty else 0
-            except:
+            except Exception:
                 limit_up_count = 0
             
             # 获取跌停股票
             try:
                 limit_down_df = ak.stock_zt_pool_dtgc_em(date=today)
                 limit_down_count = len(limit_down_df) if limit_down_df is not None and not limit_down_df.empty else 0
-            except:
+            except Exception:
                 limit_down_count = 0
             
             # 计算涨跌停比例
@@ -576,7 +576,7 @@ class MarketSentimentDataFetcher:
                             "interpretation": interpretation,
                             "date": datetime.now().strftime('%Y-%m-%d')
                         }
-            except:
+            except Exception:
                 pass
             
             # 方法2：获取融资融券汇总数据
@@ -591,7 +591,7 @@ class MarketSentimentDataFetcher:
                         "interpretation": ["市场整体融资融券数据"],
                         "date": latest.get('交易日期', 'N/A')
                     }
-            except:
+            except Exception:
                 pass
                 
         except Exception as e:
@@ -621,7 +621,7 @@ class MarketSentimentDataFetcher:
                     # 根据涨跌家数比例调整分数（权重30%）
                     score += (up_ratio - 0.5) * 60
                     factors.append(f"涨跌家数比例: {up_ratio:.1%}")
-            except:
+            except Exception:
                 pass
             
             # 确保分数在0-100之间

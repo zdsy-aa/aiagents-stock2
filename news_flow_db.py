@@ -3,233 +3,235 @@
 用于存储和管理新闻流量监测数据
 包含：快照、新闻、情绪、预警、AI分析、定时任务日志
 """
-import sqlite3
 import json
+import sqlite3
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from collections import Counter
+from base_db import BaseDatabase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class NewsFlowDatabase:
+class NewsFlowDatabase(BaseDatabase):
     """新闻流量数据库管理类"""
     
     def __init__(self, db_path: str = "news_flow.db"):
-        self.db_path = db_path
-        self.init_database()
-    
+        super().__init__(db_path)
+
     def get_connection(self):
-        """获取数据库连接"""
-        conn = sqlite3.connect(self.db_path)
+        """获取数据库连接（兼容历史方法：sqlite3.Row 行工厂 + WAL/超时配置）
+
+        说明：基类 BaseDatabase.conn() 返回的是普通元组连接，而历史查询方法依赖
+        按列名访问（row['col']）与 dict(row)，因此这里单独提供带 Row 行工厂的连接。
+        WAL + busy_timeout 与基类保持一致，避免并发锁问题。
+        """
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         return conn
-    
-    def init_database(self):
+
+    def init_tables(self):
         """初始化数据库表"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # 1. 新闻流量快照表（记录每次监测的整体情况）
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS flow_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fetch_time TEXT NOT NULL,
-            total_platforms INTEGER NOT NULL,
-            success_count INTEGER NOT NULL,
-            total_score INTEGER NOT NULL,
-            flow_level TEXT NOT NULL,
-            social_score INTEGER,
-            news_score INTEGER,
-            finance_score INTEGER,
-            tech_score INTEGER,
-            analysis TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # 2. 平台新闻表（存储各平台的新闻数据）
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS platform_news (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER NOT NULL,
-            platform TEXT NOT NULL,
-            platform_name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            weight INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT,
-            url TEXT,
-            source TEXT,
-            publish_time TEXT,
-            rank INTEGER,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
-        )
-        ''')
-        
-        # 3. 股票相关新闻表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS stock_related_news (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER NOT NULL,
-            platform TEXT NOT NULL,
-            platform_name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            weight INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT,
-            url TEXT,
-            source TEXT,
-            publish_time TEXT,
-            matched_keywords TEXT,
-            keyword_count INTEGER,
-            score INTEGER,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
-        )
-        ''')
-        
-        # 4. 热门话题表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS hot_topics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER NOT NULL,
-            topic TEXT NOT NULL,
-            count INTEGER NOT NULL,
-            heat INTEGER NOT NULL,
-            cross_platform INTEGER,
-            sources TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
-        )
-        ''')
-        
-        # 5. 监测历史统计表（按天汇总）
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS flow_statistics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL UNIQUE,
-            avg_score INTEGER,
-            max_score INTEGER,
-            min_score INTEGER,
-            snapshot_count INTEGER,
-            top_topics TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # 6. 情绪指标记录表【新增】
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sentiment_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER,
-            sentiment_index INTEGER NOT NULL,
-            sentiment_class TEXT NOT NULL,
-            flow_stage TEXT NOT NULL,
-            momentum REAL,
-            viral_k REAL,
-            flow_type TEXT,
-            stage_analysis TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
-        )
-        ''')
-        
-        # 7. 预警记录表【新增】
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS flow_alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            alert_type TEXT NOT NULL,
-            alert_level TEXT NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT,
-            related_topics TEXT,
-            trigger_value TEXT,
-            threshold_value TEXT,
-            is_notified INTEGER DEFAULT 0,
-            snapshot_id INTEGER,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
-        )
-        ''')
-        
-        # 8. AI分析记录表【新增】
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS ai_analysis (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_id INTEGER,
-            affected_sectors TEXT,
-            recommended_stocks TEXT,
-            risk_level TEXT,
-            risk_factors TEXT,
-            advice TEXT,
-            confidence INTEGER,
-            summary TEXT,
-            raw_response TEXT,
-            model_used TEXT,
-            analysis_time REAL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
-        )
-        ''')
-        
-        # 9. 定时任务日志表【新增】
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS scheduler_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_name TEXT NOT NULL,
-            task_type TEXT,
-            status TEXT NOT NULL,
-            message TEXT,
-            duration REAL,
-            snapshot_id INTEGER,
-            executed_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # 10. 预警配置表【新增】
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS alert_config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            config_key TEXT NOT NULL UNIQUE,
-            config_value TEXT NOT NULL,
-            description TEXT,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # 初始化预警配置默认值
-        default_configs = [
-            ('heat_threshold', '800', '热度飙升阈值'),
-            ('rank_change_threshold', '10', '排名变化阈值'),
-            ('sentiment_high_threshold', '90', '情绪高位阈值'),
-            ('sentiment_low_threshold', '20', '情绪低位阈值'),
-            ('viral_k_threshold', '1.5', 'K值阈值'),
-            ('alert_enabled', 'true', '预警开关'),
-            ('notification_enabled', 'true', '通知开关'),
-        ]
-        
-        for key, value, desc in default_configs:
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            # 1. 新闻流量快照表（记录每次监测的整体情况）
             cursor.execute('''
+            CREATE TABLE IF NOT EXISTS flow_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fetch_time TEXT NOT NULL,
+                total_platforms INTEGER NOT NULL,
+                success_count INTEGER NOT NULL,
+                total_score INTEGER NOT NULL,
+                flow_level TEXT NOT NULL,
+                social_score INTEGER,
+                news_score INTEGER,
+                finance_score INTEGER,
+                tech_score INTEGER,
+                analysis TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            
+            # 2. 平台新闻表（存储各平台的新闻数据）
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS platform_news (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER NOT NULL,
+                platform TEXT NOT NULL,
+                platform_name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                weight INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT,
+                url TEXT,
+                source TEXT,
+                publish_time TEXT,
+                rank INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
+            )
+            ''')
+            
+            # 3. 股票相关新闻表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS stock_related_news (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER NOT NULL,
+                platform TEXT NOT NULL,
+                platform_name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                weight INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT,
+                url TEXT,
+                source TEXT,
+                publish_time TEXT,
+                matched_keywords TEXT,
+                keyword_count INTEGER,
+                score INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
+            )
+            ''')
+            
+            # 4. 热门话题表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS hot_topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER NOT NULL,
+                topic TEXT NOT NULL,
+                count INTEGER NOT NULL,
+                heat INTEGER NOT NULL,
+                cross_platform INTEGER,
+                sources TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
+            )
+            ''')
+            
+            # 5. 监测历史统计表（按天汇总）
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS flow_statistics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL UNIQUE,
+                avg_score INTEGER,
+                max_score INTEGER,
+                min_score INTEGER,
+                snapshot_count INTEGER,
+                top_topics TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            
+            # 6. 情绪指标记录表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sentiment_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER,
+                sentiment_index INTEGER NOT NULL,
+                sentiment_class TEXT NOT NULL,
+                flow_stage TEXT NOT NULL,
+                momentum REAL,
+                viral_k REAL,
+                flow_type TEXT,
+                stage_analysis TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
+            )
+            ''')
+            
+            # 7. 预警记录表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS flow_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_type TEXT NOT NULL,
+                alert_level TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT,
+                related_topics TEXT,
+                trigger_value TEXT,
+                threshold_value TEXT,
+                is_notified INTEGER DEFAULT 0,
+                snapshot_id INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
+            )
+            ''')
+            
+            # 8. AI分析记录表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER,
+                affected_sectors TEXT,
+                recommended_stocks TEXT,
+                risk_level TEXT,
+                risk_factors TEXT,
+                advice TEXT,
+                confidence INTEGER,
+                summary TEXT,
+                raw_response TEXT,
+                model_used TEXT,
+                analysis_time REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES flow_snapshots(id)
+            )
+            ''')
+            
+            # 9. 定时任务日志表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scheduler_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL,
+                task_type TEXT,
+                status TEXT NOT NULL,
+                message TEXT,
+                duration REAL,
+                snapshot_id INTEGER,
+                executed_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            
+            # 10. 预警配置表
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS alert_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_key TEXT NOT NULL UNIQUE,
+                config_value TEXT NOT NULL,
+                description TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            
+            # 初始化预警配置默认值
+            default_configs = [
+                ('heat_threshold', '800', '热度飙升阈值'),
+                ('rank_change_threshold', '10', '排名变化阈值'),
+                ('sentiment_high_threshold', '90', '情绪高位阈值'),
+                ('sentiment_low_threshold', '20', '情绪低位阈值'),
+                ('viral_k_threshold', '1.5', 'K值阈值'),
+                ('alert_enabled', 'true', '预警开关'),
+                ('notification_enabled', 'true', '通知开关'),
+            ]
+            
+            cursor.executemany('''
             INSERT OR IGNORE INTO alert_config (config_key, config_value, description)
             VALUES (?, ?, ?)
-            ''', (key, value, desc))
-        
-        # 数据库迁移：添加缺失的列
-        self._migrate_database(cursor)
-        
-        conn.commit()
-        conn.close()
-        logger.info("✅ 新闻流量数据库初始化完成")
+            ''', default_configs)
+            
+            # 数据库迁移
+            self._migrate_database(cursor)
+            conn.commit()
+            logger.info("✅ 新闻流量数据库初始化完成")
     
     def _migrate_database(self, cursor):
         """数据库迁移：添加缺失的列"""
-        # 定义需要迁移的列
         migrations = [
-            # (表名, 列名, 列定义)
             ('stock_related_news', 'score', 'INTEGER DEFAULT 0'),
             ('stock_related_news', 'rank', 'INTEGER'),
             ('platform_news', 'rank', 'INTEGER'),
@@ -239,190 +241,132 @@ class NewsFlowDatabase:
         
         for table, column, column_def in migrations:
             try:
-                # 检查列是否存在
                 cursor.execute(f"PRAGMA table_info({table})")
                 columns = [row[1] for row in cursor.fetchall()]
-                
                 if column not in columns:
                     cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
                     logger.info(f"✅ 迁移: 向 {table} 添加列 {column}")
             except Exception as e:
                 logger.warning(f"迁移列 {table}.{column} 时出错: {e}")
     
-    # ==================== 快照相关方法 ====================
-    
     def save_flow_snapshot(self, flow_data: Dict, platforms_data: List[Dict], 
                            stock_news: List[Dict], hot_topics: List[Dict]) -> int:
-        """
-        保存完整的流量快照
-        
-        Args:
-            flow_data: 流量得分数据
-            platforms_data: 平台新闻数据
-            stock_news: 股票相关新闻
-            hot_topics: 热门话题
-            
-        Returns:
-            snapshot_id: 快照ID
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        try:
-            # 1. 保存快照主表
-            cursor.execute('''
-            INSERT INTO flow_snapshots 
-            (fetch_time, total_platforms, success_count, total_score, flow_level,
-             social_score, news_score, finance_score, tech_score, analysis)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                len(platforms_data),
-                sum(1 for p in platforms_data if p.get('success')),
-                flow_data['total_score'],
-                flow_data['level'],
-                flow_data.get('social_score', 0),
-                flow_data.get('news_score', 0),
-                flow_data.get('finance_score', 0),
-                flow_data.get('tech_score', 0),
-                flow_data.get('analysis', '')
-            ))
-            
-            snapshot_id = cursor.lastrowid
-            
-            # 2. 保存平台新闻
-            for platform_data in platforms_data:
-                if not platform_data.get('success'):
-                    continue
+        """保存完整的流量快照"""
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                INSERT INTO flow_snapshots 
+                (fetch_time, total_platforms, success_count, total_score, flow_level,
+                 social_score, news_score, finance_score, tech_score, analysis)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    len(platforms_data),
+                    sum(1 for p in platforms_data if p.get('success')),
+                    flow_data['total_score'],
+                    flow_data['level'],
+                    flow_data.get('social_score', 0),
+                    flow_data.get('news_score', 0),
+                    flow_data.get('finance_score', 0),
+                    flow_data.get('tech_score', 0),
+                    flow_data.get('analysis', '')
+                ))
+                snapshot_id = cursor.lastrowid
                 
-                for news in platform_data.get('data', []):
-                    cursor.execute('''
+                platform_news_rows = [
+                    (snapshot_id, platform_data['platform'], platform_data['platform_name'],
+                     platform_data['category'], platform_data['weight'], news.get('title') or '',
+                     news.get('content') or '', news.get('url') or '', news.get('source') or '',
+                     news.get('publish_time') or '', news.get('rank', 0))
+                    for platform_data in platforms_data if platform_data.get('success')
+                    for news in platform_data.get('data', [])
+                ]
+                if platform_news_rows:
+                    cursor.executemany('''
                     INSERT INTO platform_news
                     (snapshot_id, platform, platform_name, category, weight,
                      title, content, url, source, publish_time, rank)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        snapshot_id,
-                        platform_data['platform'],
-                        platform_data['platform_name'],
-                        platform_data['category'],
-                        platform_data['weight'],
-                        news.get('title') or '',
-                        news.get('content') or '',
-                        news.get('url') or '',
-                        news.get('source') or '',
-                        news.get('publish_time') or '',
-                        news.get('rank', 0)
-                    ))
-            
-            # 3. 保存股票相关新闻
-            for news in stock_news:
-                cursor.execute('''
-                INSERT INTO stock_related_news
-                (snapshot_id, platform, platform_name, category, weight,
-                 title, content, url, source, publish_time, matched_keywords, keyword_count, score)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    snapshot_id,
-                    news['platform'],
-                    news['platform_name'],
-                    news['category'],
-                    news['weight'],
-                    news['title'],
-                    news.get('content') or '',
-                    news.get('url') or '',
-                    news.get('source') or '',
-                    news.get('publish_time') or '',
-                    json.dumps(news.get('matched_keywords', []), ensure_ascii=False),
-                    news.get('keyword_count', 0),
-                    news.get('score', 0)
-                ))
-            
-            # 4. 保存热门话题
-            for topic in hot_topics:
-                cursor.execute('''
-                INSERT INTO hot_topics
-                (snapshot_id, topic, count, heat, cross_platform, sources)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ''', (
-                    snapshot_id,
-                    topic['topic'],
-                    topic['count'],
-                    topic['heat'],
-                    topic.get('cross_platform', 0),
-                    json.dumps(topic.get('sources', []), ensure_ascii=False)
-                ))
-            
-            # 5. 更新每日统计
-            self._update_daily_statistics(cursor, flow_data['total_score'], hot_topics)
-            
-            conn.commit()
-            logger.info(f"✅ 保存流量快照成功，ID: {snapshot_id}")
-            return snapshot_id
-            
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"❌ 保存流量快照失败: {e}")
-            raise
-        finally:
-            conn.close()
-    
+                    ''', platform_news_rows)
+
+                if stock_news:
+                    cursor.executemany('''
+                    INSERT INTO stock_related_news
+                    (snapshot_id, platform, platform_name, category, weight,
+                     title, content, url, source, publish_time, matched_keywords, keyword_count, score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', [(snapshot_id, news['platform'], news['platform_name'], news['category'],
+                           news['weight'], news['title'], news.get('content') or '', news.get('url') or '',
+                           news.get('source') or '', news.get('publish_time') or '',
+                           json.dumps(news.get('matched_keywords', []), ensure_ascii=False),
+                           news.get('keyword_count', 0), news.get('score', 0)) for news in stock_news])
+
+                if hot_topics:
+                    cursor.executemany('''
+                    INSERT INTO hot_topics
+                    (snapshot_id, topic, count, heat, cross_platform, sources)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ''', [(snapshot_id, topic['topic'], topic['count'], topic['heat'],
+                           topic.get('cross_platform', 0), json.dumps(topic.get('sources', []), ensure_ascii=False))
+                          for topic in hot_topics])
+
+                self._update_daily_statistics(cursor, flow_data['total_score'], hot_topics)
+                conn.commit()
+                return snapshot_id
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"❌ 保存流量快照失败: {e}")
+                raise
+
     def _update_daily_statistics(self, cursor, score: int, hot_topics: List[Dict]):
         """更新每日统计"""
         today = datetime.now().strftime('%Y-%m-%d')
-        
         cursor.execute('''
         SELECT avg_score, max_score, min_score, snapshot_count, top_topics
         FROM flow_statistics WHERE date = ?
         ''', (today,))
-        
         row = cursor.fetchone()
         
         if row:
-            old_avg = row['avg_score'] or 0
-            old_count = row['snapshot_count'] or 0
+            old_avg = row[0] or 0
+            old_count = row[3] or 0
             new_avg = int((old_avg * old_count + score) / (old_count + 1))
-            new_max = max(row['max_score'] or 0, score)
-            new_min = min(row['min_score'] or 999999, score)
-            
-            old_topics = json.loads(row['top_topics']) if row['top_topics'] else []
+            new_max = max(row[1] or 0, score)
+            new_min = min(row[2] or 999999, score)
+            old_topics = json.loads(row[4]) if row[4] else []
             new_topics = old_topics + [t['topic'] for t in hot_topics[:10]]
             topic_counter = Counter(new_topics)
             top_topics = [topic for topic, _ in topic_counter.most_common(20)]
-            
             cursor.execute('''
             UPDATE flow_statistics
-            SET avg_score = ?, max_score = ?, min_score = ?, 
-                snapshot_count = ?, top_topics = ?
+            SET avg_score = ?, max_score = ?, min_score = ?, snapshot_count = ?, top_topics = ?
             WHERE date = ?
-            ''', (new_avg, new_max, new_min, old_count + 1,
-                  json.dumps(top_topics, ensure_ascii=False), today))
+            ''', (new_avg, new_max, new_min, old_count + 1, json.dumps(top_topics, ensure_ascii=False), today))
         else:
-            top_topics = [t['topic'] for t in hot_topics[:20]]
+            top_topics = [t['topic'] for t in hot_topics[:10]]
             cursor.execute('''
-            INSERT INTO flow_statistics
-            (date, avg_score, max_score, min_score, snapshot_count, top_topics)
+            INSERT INTO flow_statistics (date, avg_score, max_score, min_score, snapshot_count, top_topics)
             VALUES (?, ?, ?, ?, ?, ?)
-            ''', (today, score, score, score, 1,
-                  json.dumps(top_topics, ensure_ascii=False)))
-    
-    def get_latest_snapshot(self) -> Optional[Dict]:
-        """获取最新的流量快照"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-        SELECT * FROM flow_snapshots
-        ORDER BY created_at DESC LIMIT 1
-        ''')
-        
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return dict(row)
-        return None
-    
+            ''', (today, score, score, score, 1, json.dumps(top_topics, ensure_ascii=False)))
+
+    def get_latest_snapshot(self) -> Dict:
+        """获取最新的快照"""
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, fetch_time, total_platforms, success_count, total_score, flow_level,
+                       social_score, news_score, finance_score, tech_score, analysis, created_at
+                FROM flow_snapshots ORDER BY id DESC LIMIT 1
+            ''')
+            row = cursor.fetchone()
+            if not row: return None
+            return {
+                'id': row[0], 'fetch_time': row[1], 'total_platforms': row[2], 'success_count': row[3],
+                'total_score': row[4], 'flow_level': row[5], 'social_score': row[6], 'news_score': row[7],
+                'finance_score': row[8], 'tech_score': row[9], 'analysis': row[10], 'created_at': row[11]
+            }
+
     def get_recent_snapshots(self, limit: int = 10) -> List[Dict]:
         """获取最近的流量快照列表"""
         conn = self.get_connection()
@@ -909,113 +853,5 @@ class NewsFlowDatabase:
         conn.close()
         return configs
 
-
 # 全局数据库实例
 news_flow_db = NewsFlowDatabase()
-
-
-# 测试代码
-if __name__ == "__main__":
-    print("=== 测试新闻流量数据库 ===")
-    
-    # 测试保存快照
-    flow_data = {
-        'total_score': 650,
-        'social_score': 200,
-        'news_score': 180,
-        'finance_score': 220,
-        'tech_score': 50,
-        'level': '高',
-        'analysis': '流量较高，市场活跃'
-    }
-    
-    platforms_data = [{
-        'success': True,
-        'platform': 'weibo',
-        'platform_name': '微博热搜',
-        'category': 'social',
-        'weight': 10,
-        'data': [
-            {'title': '某某股票大涨', 'content': '今日涨停', 'url': 'http://example.com', 
-             'source': '微博', 'publish_time': '2026-01-25 10:00:00', 'rank': 1}
-        ]
-    }]
-    
-    stock_news = [{
-        'platform': 'weibo',
-        'platform_name': '微博热搜',
-        'category': 'social',
-        'weight': 10,
-        'title': '某某股票大涨',
-        'content': '今日涨停',
-        'url': 'http://example.com',
-        'source': '微博',
-        'publish_time': '2026-01-25 10:00:00',
-        'matched_keywords': ['股票', '涨停'],
-        'keyword_count': 2,
-        'score': 100
-    }]
-    
-    hot_topics = [
-        {'topic': 'AI', 'count': 50, 'heat': 95, 'cross_platform': 5, 'sources': ['微博', '抖音']},
-        {'topic': '新能源', 'count': 30, 'heat': 80, 'cross_platform': 3, 'sources': ['微博']}
-    ]
-    
-    snapshot_id = news_flow_db.save_flow_snapshot(flow_data, platforms_data, stock_news, hot_topics)
-    print(f"✅ 保存快照成功，ID: {snapshot_id}")
-    
-    # 测试保存情绪记录
-    sentiment_data = {
-        'sentiment_index': 75,
-        'sentiment_class': '乐观',
-        'flow_stage': '加速',
-        'momentum': 1.5,
-        'viral_k': 1.2,
-        'flow_type': '增量流量型',
-        'stage_analysis': '流量正在快速上升'
-    }
-    sentiment_id = news_flow_db.save_sentiment_record(snapshot_id, sentiment_data)
-    print(f"✅ 保存情绪记录成功，ID: {sentiment_id}")
-    
-    # 测试保存预警
-    alert_data = {
-        'alert_type': 'heat_surge',
-        'alert_level': 'warning',
-        'title': '热度飙升预警',
-        'content': '当前流量得分650，超过阈值500',
-        'related_topics': ['AI', '新能源'],
-        'trigger_value': 650,
-        'threshold_value': 500,
-        'snapshot_id': snapshot_id
-    }
-    alert_id = news_flow_db.save_alert(alert_data)
-    print(f"✅ 保存预警成功，ID: {alert_id}")
-    
-    # 测试保存AI分析
-    ai_data = {
-        'affected_sectors': [{'name': 'AI', 'impact': '利好', 'reason': '政策支持'}],
-        'recommended_stocks': [{'code': '000001', 'name': '平安银行', 'reason': '龙头'}],
-        'risk_level': '中等',
-        'risk_factors': ['追高风险', '流动性风险'],
-        'advice': '观望',
-        'confidence': 75,
-        'summary': '当前市场热度较高，建议观望',
-        'model_used': 'deepseek-chat',
-        'analysis_time': 2.5
-    }
-    ai_id = news_flow_db.save_ai_analysis(snapshot_id, ai_data)
-    print(f"✅ 保存AI分析成功，ID: {ai_id}")
-    
-    # 测试保存任务日志
-    log_id = news_flow_db.save_scheduler_log(
-        '热点同步', 'sync_hotspots', 'success', 
-        '成功同步22个平台', 5.2, snapshot_id
-    )
-    print(f"✅ 保存任务日志成功，ID: {log_id}")
-    
-    # 测试获取详情
-    detail = news_flow_db.get_snapshot_detail(snapshot_id)
-    print(f"\n快照详情:")
-    print(f"  流量得分: {detail['snapshot']['total_score']}")
-    print(f"  情绪指数: {detail['sentiment']['sentiment_index'] if detail['sentiment'] else 'N/A'}")
-    print(f"  AI建议: {detail['ai_analysis']['advice'] if detail['ai_analysis'] else 'N/A'}")

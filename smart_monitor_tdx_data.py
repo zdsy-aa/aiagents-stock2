@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 class SmartMonitorTDXDataFetcher:
     """TDX数据获取器"""
     
-    def __init__(self, base_url: str = "http://192.168.1.222:8181"):
+    def __init__(self, base_url: str = "http://127.0.0.1:8080"):
         """
         初始化TDX数据获取器
         
@@ -416,7 +416,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     
     # 使用默认地址测试
-    fetcher = SmartMonitorTDXDataFetcher(base_url="http://192.168.1.222:8181")
+    fetcher = SmartMonitorTDXDataFetcher(base_url="http://127.0.0.1:8080")
     
     # 测试平安银行(000001)
     print("测试获取平安银行(000001)数据...")

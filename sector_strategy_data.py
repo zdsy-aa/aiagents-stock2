@@ -251,7 +251,7 @@ class SectorStrategyDataFetcher:
                     limit_down = len(df_stat[df_stat['涨跌幅'] <= -9.5])
                     overview["limit_up"] = limit_up
                     overview["limit_down"] = limit_down
-            except:
+            except Exception:
                 pass
             
             # 大盘指数
@@ -288,7 +288,7 @@ class SectorStrategyDataFetcher:
                         "change_pct": df_cyb.iloc[0].get('涨跌幅', 0),
                         "change": df_cyb.iloc[0].get('涨跌额', 0)
                     }
-            except:
+            except Exception:
                 pass
             
             return overview
@@ -405,29 +405,51 @@ class SectorStrategyDataFetcher:
         return {}
     
     def _get_financial_news(self):
-        """获取财经新闻"""
-        try:
-            # 获取东方财富财经新闻（使用重试机制）
-            df = self._safe_request(ak.stock_news_em, symbol="全球")
-            
-            if df is None or df.empty:
-                return []
-            
-            news_list = []
-            for idx, row in df.head(150).iterrows():  # 取前150条
-                news_list.append({
-                    "title": row.get('新闻标题', ''),
-                    "content": row.get('新闻内容', ''),
-                    "publish_time": str(row.get('发布时间', '')),
-                    "source": row.get('文章来源', ''),
-                    "url": row.get('新闻链接', '')
-                })
-            
-            return news_list
-            
-        except Exception as e:
-            print(f"    获取财经新闻失败: {e}")
-            return []
+        """获取财经新闻
+
+        说明：原用 ak.stock_news_em(symbol="全球") 在 akshare 1.18+ 上会触发内部
+        "Invalid regular expression: \\u" 错误（且 stock_news_em 实为个股新闻接口，
+        传 "全球" 用法不当）。改用 stock_info_global_cls（财联社全球电报）作为主源，
+        东财全球快讯 stock_info_global_em 作为备源，均带接口存在性防御。
+        """
+        # 主源：财联社全球电报（列：标题/内容/发布日期/发布时间）
+        if hasattr(ak, 'stock_info_global_cls'):
+            try:
+                df = self._safe_request(ak.stock_info_global_cls)
+                if df is not None and not df.empty:
+                    news_list = []
+                    for _, row in df.head(150).iterrows():
+                        pub = f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip()
+                        news_list.append({
+                            "title": row.get('标题', ''),
+                            "content": row.get('内容', ''),
+                            "publish_time": pub,
+                            "source": "财联社",
+                            "url": ''
+                        })
+                    return news_list
+            except Exception as e:
+                print(f"    财联社财经新闻获取失败，尝试备源: {e}")
+
+        # 备源：东财全球财经快讯（列：标题/摘要/发布时间/链接）
+        if hasattr(ak, 'stock_info_global_em'):
+            try:
+                df = self._safe_request(ak.stock_info_global_em)
+                if df is not None and not df.empty:
+                    news_list = []
+                    for _, row in df.head(150).iterrows():
+                        news_list.append({
+                            "title": row.get('标题', ''),
+                            "content": row.get('摘要', '') or row.get('内容', ''),
+                            "publish_time": str(row.get('发布时间', '')),
+                            "source": "东方财富",
+                            "url": row.get('链接', '')
+                        })
+                    return news_list
+            except Exception as e:
+                print(f"    获取财经新闻失败: {e}")
+
+        return []
     
     def format_data_for_ai(self, data):
         """

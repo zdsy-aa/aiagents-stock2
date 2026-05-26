@@ -67,6 +67,8 @@ def display_monitor_status():
         qmt_status = get_miniqmt_status()
         if qmt_status['ready']:
             st.success("🤖 QMT在线")
+        elif not qmt_status.get('implemented', True):
+            st.info("🤖 QMT开发中")
         else:
             st.info("🤖 QMT离线")
     
@@ -630,12 +632,16 @@ def display_miniqmt_status():
     st.markdown("### 🤖 MiniQMT量化交易")
     
     qmt_status = get_miniqmt_status()
-    
+
+    # 实盘对接尚未实现时，明确提示这是占位接口，避免误导用户进行真实交易
+    if not qmt_status.get('implemented', True):
+        st.warning("⚠️ MiniQMT 实盘接口尚未实现，当前为占位接口，**不会执行任何真实交易**。")
+
     col1, col2 = st.columns([1, 1])
-    
+
     with col1:
         st.subheader("📊 连接状态")
-        
+
         if qmt_status['enabled']:
             st.success("✅ MiniQMT已启用")
         else:

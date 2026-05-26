@@ -113,19 +113,19 @@ class SmallCapSelector:
                         details.append(f"市值:{cap_val/100000000:.2f}亿")
                     else:
                         details.append(f"市值:{cap_val/10000:.2f}万")
-                except:
+                except Exception:
                     pass
             
             if revenue_growth != 'N/A':
                 try:
                     details.append(f"营收增长:{float(revenue_growth):.2f}%")
-                except:
+                except Exception:
                     pass
             
             if profit_growth != 'N/A':
                 try:
                     details.append(f"净利增长:{float(profit_growth):.2f}%")
-                except:
+                except Exception:
                     pass
             
             if details:

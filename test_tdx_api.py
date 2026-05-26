@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 获取TDX API URL
-TDX_API_URL = os.getenv('TDX_BASE_URL', 'http://127.0.0.1:5000')
+TDX_API_URL = os.getenv('TDX_BASE_URL', 'http://127.0.0.1:8080')
 
 print("=" * 60)
 print("TDX API配置测试")
@@ -36,7 +36,7 @@ except Exception as e:
     print("\n提示:")
     print("   - 请检查TDX API服务是否已启动")
     print("   - 请检查.env中的TDX_API_URL配置是否正确")
-    print("   - 默认地址: http://192.168.1.222:8181")
+    print("   - 默认地址: http://127.0.0.1:8080")
     sys.exit(1)
 
 # 测试2: 获取K线数据

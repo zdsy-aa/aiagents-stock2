@@ -1,22 +1,26 @@
-version: '3.8'
-
 services:
   agentsstock:
     build:
       context: .
       dockerfile: Dockerfile
+    image: aiagents-stock-app
     container_name: agentsstock1
     ports:
       - "8503:8503"
     volumes:
-      # 数据和数据库持久化 - 使用目录挂载而不是文件挂载
       - ./data:/app/data
-      # 环境变量配置文件
       - ./.env:/app/.env
+      # route B：tdx-api 下载的本地K线库（只读），网关第0级最高优先级数据源
+      - ./tdx-data:/app/tdx-data:ro
     environment:
-      # 可以在这里设置环境变量，或者使用.env文件
       - TZ=Asia/Shanghai
+      - LOCAL_DB_DIR=/app/tdx-data/database/kline
     restart: unless-stopped
+    depends_on:
+      tdx-stock-web:
+        condition: service_healthy
+      aktools:
+        condition: service_healthy
     networks:
       - agentsstock-network
     healthcheck:
@@ -26,7 +30,42 @@ services:
       retries: 3
       start_period: 60s
 
+  # AKTools 数据网关（降级链第2级）：复用主应用镜像，仅覆盖启动命令
+  # 容器内无代理变量，A股境内接口走直连；主应用经内网 http://aktools:8088 访问
+  aktools:
+    image: aiagents-stock-app
+    container_name: aktools
+    command: ["python", "-m", "aktools", "--host", "0.0.0.0", "--port", "8088"]
+    ports:
+      - "8088:8088"
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    networks:
+      - agentsstock-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  tdx-stock-web:
+    build:
+      context: ./tdx-api
+      dockerfile: Dockerfile
+    container_name: tdx-stock-web
+    ports:
+      - "8080:8080"
+    volumes:
+      # 持久化下载的本地K线/代码库（codes.db、workday.db、database/kline），避免重建丢失
+      - ./tdx-data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    networks:
+      - agentsstock-network
+
 networks:
   agentsstock-network:
     driver: bridge
-
