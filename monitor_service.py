@@ -159,6 +159,11 @@ class StockMonitorService:
                 monitor_db.add_notification(stock['id'], 'stop_loss', message)
                 notification_service.send_notifications()
 
+    def get_scheduler(self):
+        """获取交易时段定时调度器单例（延迟导入避免循环依赖）"""
+        from monitor_scheduler import get_scheduler as _get_scheduler
+        return _get_scheduler(self)
+
 # P3 整改十八: 延迟加载单例
 _monitor_service_instance = None
 def get_monitor_service():

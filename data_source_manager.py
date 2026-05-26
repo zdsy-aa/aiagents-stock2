@@ -119,7 +119,7 @@ class DataSourceManager:
                 cache_category='daily',
                 symbol=clean_symbol
             )
-            if df is not None and not df.empty:
+            if df is not None and not df.empty and {'item', 'value'}.issubset(df.columns):
                 for _, row in df.iterrows():
                     key = row['item']
                     value = row['value']
@@ -133,9 +133,12 @@ class DataSourceManager:
                         info['market_cap'] = value
                     elif key == '流通市值':
                         info['circulating_market_cap'] = value
-                
+
                 logger.info(f"[网关] ✅ 成功获取 {clean_symbol} 基本信息")
                 return info
+            else:
+                # 东财接口被封/降级后返回的表无 item/value 列，优雅跳到下一数据源
+                logger.debug(f"[网关] stock_individual_info_em 无 item/value 列，跳过补充")
         except Exception as e:
             logger.warning(f"[网关] ⚠️ 获取基本信息失败: {e}")
         

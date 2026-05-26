@@ -217,5 +217,83 @@ class SmartMonitorDB(BaseDatabase):
             conn.commit()
             return decision_id
 
+    def get_ai_decisions(self, stock_code: str = None, limit: int = 50) -> List[Dict]:
+        """获取AI决策记录（按时间倒序）。stock_code 为 None 时取全部。"""
+        def _loads(s):
+            try:
+                return json.loads(s) if s else {}
+            except (ValueError, TypeError):
+                return {}
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            query = '''SELECT id, stock_code, stock_name, decision_time, trading_session,
+                              action, confidence, reasoning, position_size_pct,
+                              stop_loss_pct, take_profit_pct, risk_level,
+                              key_price_levels, market_data, account_info,
+                              executed, execution_result, created_at
+                       FROM ai_decisions'''
+            params = []
+            if stock_code:
+                query += ' WHERE stock_code = ?'
+                params.append(stock_code)
+            query += ' ORDER BY id DESC LIMIT ?'
+            params.append(limit)
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [{
+                'id': r[0], 'stock_code': r[1], 'stock_name': r[2], 'decision_time': r[3],
+                'trading_session': r[4], 'action': r[5], 'confidence': r[6], 'reasoning': r[7],
+                'position_size_pct': r[8], 'stop_loss_pct': r[9], 'take_profit_pct': r[10],
+                'risk_level': r[11], 'key_price_levels': _loads(r[12]), 'market_data': _loads(r[13]),
+                'account_info': _loads(r[14]), 'executed': r[15], 'execution_result': r[16],
+                'created_at': r[17]
+            } for r in rows]
+
+    def get_trade_records(self, limit: int = 50) -> List[Dict]:
+        """获取交易记录（按时间倒序）"""
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''SELECT id, stock_code, stock_name, trade_type, quantity, price,
+                                     amount, order_id, order_status, ai_decision_id, trade_time,
+                                     commission, tax, profit_loss, created_at
+                              FROM trade_records ORDER BY id DESC LIMIT ?''', (limit,))
+            rows = cursor.fetchall()
+            return [{
+                'id': r[0], 'stock_code': r[1], 'stock_name': r[2], 'trade_type': r[3],
+                'quantity': r[4], 'price': r[5], 'amount': r[6], 'order_id': r[7],
+                'order_status': r[8], 'ai_decision_id': r[9], 'trade_time': r[10],
+                'commission': r[11], 'tax': r[12], 'profit_loss': r[13], 'created_at': r[14]
+            } for r in rows]
+
+    def update_monitor_task(self, stock_code: str, updates: Dict) -> bool:
+        """更新监控任务字段（按 stock_code 定位）。updates 形如 {列名: 值}。"""
+        allowed = {
+            'task_name', 'stock_name', 'enabled', 'check_interval', 'auto_trade',
+            'position_size_pct', 'stop_loss_pct', 'take_profit_pct', 'qmt_account_id',
+            'notify_email', 'notify_webhook', 'has_position', 'position_cost',
+            'position_quantity', 'position_date', 'trading_hours_only'
+        }
+        fields = {k: v for k, v in (updates or {}).items() if k in allowed}
+        if not fields:
+            return False
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            set_clause = ', '.join(f'{k} = ?' for k in fields)
+            params = list(fields.values()) + [stock_code]
+            cursor.execute(
+                f'UPDATE monitor_tasks SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE stock_code = ?',
+                params
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_monitor_task(self, task_id: int) -> bool:
+        """删除监控任务（按 id）"""
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM monitor_tasks WHERE id = ?', (task_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
 # 全局实例
 smart_monitor_db = SmartMonitorDB()
