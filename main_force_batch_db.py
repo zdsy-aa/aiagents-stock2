@@ -4,48 +4,49 @@
 主力选股批量分析历史记录数据库模块
 """
 
-import sqlite3
 import json
+import logging
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import pandas as pd
+from base_db import BaseDatabase
 
-class MainForceBatchDatabase:
+logger = logging.getLogger(__name__)
+
+class MainForceBatchDatabase(BaseDatabase):
     """主力选股批量分析历史数据库管理类"""
     
     def __init__(self, db_path: str = "main_force_batch.db"):
         """初始化数据库连接"""
-        self.db_path = db_path
-        self._init_database()
+        super().__init__(db_path)
     
-    def _init_database(self):
+    def init_tables(self):
         """初始化数据库表结构"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 批量分析历史记录表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS batch_analysis_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                analysis_date TEXT NOT NULL,
-                batch_count INTEGER NOT NULL,
-                analysis_mode TEXT NOT NULL,
-                success_count INTEGER NOT NULL,
-                failed_count INTEGER NOT NULL,
-                total_time REAL NOT NULL,
-                results_json TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # 创建索引
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_analysis_date 
-            ON batch_analysis_history(analysis_date)
-        ''')
-        
-        conn.commit()
-        conn.close()
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            # 批量分析历史记录表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS batch_analysis_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    analysis_date TEXT NOT NULL,
+                    batch_count INTEGER NOT NULL,
+                    analysis_mode TEXT NOT NULL,
+                    success_count INTEGER NOT NULL,
+                    failed_count INTEGER NOT NULL,
+                    total_time REAL NOT NULL,
+                    results_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # 创建索引
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_analysis_date 
+                ON batch_analysis_history(analysis_date)
+            ''')
+            
+            conn.commit()
     
     def _clean_results_for_json(self, results: List[Dict]) -> List[Dict]:
         """
@@ -83,7 +84,8 @@ class MainForceBatchDatabase:
             else:
                 try:
                     return str(value)
-                except:
+                except Exception:
+                    logger.debug("对象无法序列化，已降级为占位符", exc_info=True)
                     return "无法序列化"
         
         cleaned = []
@@ -124,26 +126,24 @@ class MainForceBatchDatabase:
         Returns:
             记录ID
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 清理结果数据，确保可以JSON序列化
-        cleaned_results = self._clean_results_for_json(results)
-        results_json = json.dumps(cleaned_results, ensure_ascii=False, default=str)
-        
-        cursor.execute('''
-            INSERT INTO batch_analysis_history 
-            (analysis_date, batch_count, analysis_mode, success_count, failed_count, total_time, results_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (analysis_date, batch_count, analysis_mode, success_count, failed_count, total_time, results_json))
-        
-        record_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return record_id
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 清理结果数据，确保可以JSON序列化
+            cleaned_results = self._clean_results_for_json(results)
+            results_json = json.dumps(cleaned_results, ensure_ascii=False, default=str)
+            
+            cursor.execute('''
+                INSERT INTO batch_analysis_history 
+                (analysis_date, batch_count, analysis_mode, success_count, failed_count, total_time, results_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (analysis_date, batch_count, analysis_mode, success_count, failed_count, total_time, results_json))
+            
+            record_id = cursor.lastrowid
+            conn.commit()
+            return record_id
     
     def get_all_history(self, limit: int = 50) -> List[Dict]:
         """
@@ -155,25 +155,25 @@ class MainForceBatchDatabase:
         Returns:
             历史记录列表
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, analysis_date, batch_count, analysis_mode, 
-                   success_count, failed_count, total_time, results_json, created_at
-            FROM batch_analysis_history
-            ORDER BY created_at DESC
-            LIMIT ?
-        ''', (limit,))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, analysis_date, batch_count, analysis_mode, 
+                       success_count, failed_count, total_time, results_json, created_at
+                FROM batch_analysis_history
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (limit,))
+            
+            rows = cursor.fetchall()
         
         history = []
         for row in rows:
             try:
                 results = json.loads(row[7])
-            except:
+            except (json.JSONDecodeError, TypeError):
+                logger.warning("解析批量分析历史结果JSON失败，已降级为空列表", exc_info=True)
                 results = []
             
             history.append({
@@ -200,25 +200,25 @@ class MainForceBatchDatabase:
         Returns:
             记录详情
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, analysis_date, batch_count, analysis_mode, 
-                   success_count, failed_count, total_time, results_json, created_at
-            FROM batch_analysis_history
-            WHERE id = ?
-        ''', (record_id,))
-        
-        row = cursor.fetchone()
-        conn.close()
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, analysis_date, batch_count, analysis_mode, 
+                       success_count, failed_count, total_time, results_json, created_at
+                FROM batch_analysis_history
+                WHERE id = ?
+            ''', (record_id,))
+            
+            row = cursor.fetchone()
         
         if not row:
             return None
         
         try:
             results = json.loads(row[7])
-        except:
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("解析批量分析历史结果JSON失败，已降级为空列表", exc_info=True)
             results = []
         
         return {
@@ -243,16 +243,14 @@ class MainForceBatchDatabase:
         Returns:
             是否删除成功
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM batch_analysis_history WHERE id = ?', (record_id,))
-        
-        affected_rows = cursor.rowcount
-        conn.commit()
-        conn.close()
-        
-        return affected_rows > 0
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM batch_analysis_history WHERE id = ?', (record_id,))
+            
+            affected_rows = cursor.rowcount
+            conn.commit()
+            return affected_rows > 0
     
     def get_statistics(self) -> Dict:
         """
@@ -261,30 +259,28 @@ class MainForceBatchDatabase:
         Returns:
             统计数据
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 总记录数
-        cursor.execute('SELECT COUNT(*) FROM batch_analysis_history')
-        total_records = cursor.fetchone()[0]
-        
-        # 总分析股票数
-        cursor.execute('SELECT SUM(batch_count) FROM batch_analysis_history')
-        total_stocks = cursor.fetchone()[0] or 0
-        
-        # 总成功数
-        cursor.execute('SELECT SUM(success_count) FROM batch_analysis_history')
-        total_success = cursor.fetchone()[0] or 0
-        
-        # 总失败数
-        cursor.execute('SELECT SUM(failed_count) FROM batch_analysis_history')
-        total_failed = cursor.fetchone()[0] or 0
-        
-        # 平均耗时
-        cursor.execute('SELECT AVG(total_time) FROM batch_analysis_history')
-        avg_time = cursor.fetchone()[0] or 0
-        
-        conn.close()
+        with self.conn() as conn:
+            cursor = conn.cursor()
+            
+            # 总记录数
+            cursor.execute('SELECT COUNT(*) FROM batch_analysis_history')
+            total_records = cursor.fetchone()[0]
+            
+            # 总分析股票数
+            cursor.execute('SELECT SUM(batch_count) FROM batch_analysis_history')
+            total_stocks = cursor.fetchone()[0] or 0
+            
+            # 总成功数
+            cursor.execute('SELECT SUM(success_count) FROM batch_analysis_history')
+            total_success = cursor.fetchone()[0] or 0
+            
+            # 总失败数
+            cursor.execute('SELECT SUM(failed_count) FROM batch_analysis_history')
+            total_failed = cursor.fetchone()[0] or 0
+            
+            # 平均耗时
+            cursor.execute('SELECT AVG(total_time) FROM batch_analysis_history')
+            avg_time = cursor.fetchone()[0] or 0
         
         return {
             'total_records': total_records,
@@ -298,4 +294,3 @@ class MainForceBatchDatabase:
 
 # 全局数据库实例
 batch_db = MainForceBatchDatabase()
-

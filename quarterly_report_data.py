@@ -25,7 +25,7 @@ def _setup_stdout_encoding():
             # 不在streamlit环境，可以安全修改
             try:
                 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='ignore')
-            except:
+            except Exception:
                 pass
 
 _setup_stdout_encoding()
@@ -131,7 +131,7 @@ class QuarterlyReportDataFetcher:
                         continue
                     try:
                         item[col] = str(value)
-                    except:
+                    except Exception:
                         item[col] = "N/A"
                 if item:
                     data_list.append(item)
@@ -170,7 +170,7 @@ class QuarterlyReportDataFetcher:
                         continue
                     try:
                         item[col] = str(value)
-                    except:
+                    except Exception:
                         item[col] = "N/A"
                 if item:
                     data_list.append(item)
@@ -209,7 +209,7 @@ class QuarterlyReportDataFetcher:
                         continue
                     try:
                         item[col] = str(value)
-                    except:
+                    except Exception:
                         item[col] = "N/A"
                 if item:
                     data_list.append(item)
@@ -266,7 +266,7 @@ class QuarterlyReportDataFetcher:
                         try:
                             # 尝试转换为字符串
                             item[indicator_name] = str(value)
-                        except:
+                        except Exception:
                             item[indicator_name] = "N/A"
                     else:
                         item[indicator_name] = "N/A"

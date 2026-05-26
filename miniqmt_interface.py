@@ -7,9 +7,18 @@ MiniQMT量化交易接口
 """
 
 import json
+import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+# MiniQMT 实盘对接尚未实现（见下方各方法的 TODO：xtquant 连接、下单、撤单、查询等）。
+# 在真正完成对接前保持 False —— 接口将拒绝伪造"已连接 / 已下单"，避免用户误以为
+# 已接通真实交易通道。完成 xtquant 集成并填好 TODO 后，将其改为 True 即可启用。
+MINIQMT_IMPLEMENTED = False
+
 
 class TradeAction(Enum):
     """交易动作枚举"""
@@ -61,19 +70,25 @@ class MiniQMTInterface:
             (成功标志, 消息)
         """
         try:
+            # 实盘对接尚未实现：拒绝伪造"连接成功"，避免误导用户
+            if not MINIQMT_IMPLEMENTED:
+                self.connected = False
+                logger.warning("MiniQMT 实盘接口尚未实现，connect() 被拒绝")
+                return False, "MiniQMT 实盘接口尚未实现（占位接口），禁止用于真实交易"
+
             # TODO: 实现与MiniQMT的实际连接逻辑
             self.account_id = account_id or self.config.get('account_id')
-            
+
             if not self.account_id:
                 return False, "账户ID未配置"
-            
+
             # 预留接口：连接MiniQMT
             # from xtquant import xtdata
             # xtdata.connect()
-            
+
             self.connected = True
             return True, f"已连接到账户 {self.account_id}"
-            
+
         except Exception as e:
             self.connected = False
             return False, f"连接失败: {str(e)}"
@@ -170,7 +185,12 @@ class MiniQMTInterface:
         """
         if not self.is_connected():
             return False, "未连接到MiniQMT", ""
-        
+
+        # 兜底保护：实盘下单未实现时，绝不伪造"订单已提交"
+        if not MINIQMT_IMPLEMENTED:
+            logger.warning("MiniQMT 下单接口未实现，place_order() 被拒绝: %s %s", symbol, action)
+            return False, "下单接口未实现（占位），未执行任何真实交易", ""
+
         # 参数验证
         if quantity <= 0:
             return False, "数量必须大于0", ""
@@ -610,6 +630,7 @@ def get_miniqmt_status() -> Dict:
         'enabled': miniqmt.enabled,
         'connected': miniqmt.connected,
         'account_id': miniqmt.account_id,
-        'ready': miniqmt.is_connected()
+        'ready': miniqmt.is_connected(),
+        'implemented': MINIQMT_IMPLEMENTED  # 实盘对接是否已实现（未实现时仅为占位）
     }
 

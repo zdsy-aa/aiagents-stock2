@@ -105,7 +105,7 @@ class ProfitGrowthSelector:
             if profit_growth != 'N/A':
                 try:
                     details.append(f"净利增长:{float(profit_growth):.2f}%")
-                except:
+                except Exception:
                     pass
             
             if turnover != 'N/A':
@@ -115,7 +115,7 @@ class ProfitGrowthSelector:
                         details.append(f"成交额:{turnover_val/100000000:.2f}亿")
                     else:
                         details.append(f"成交额:{turnover_val/10000:.2f}万")
-                except:
+                except Exception:
                     pass
             
             if details:

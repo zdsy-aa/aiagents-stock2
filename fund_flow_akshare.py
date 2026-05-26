@@ -26,7 +26,7 @@ def _setup_stdout_encoding():
             # 不在streamlit环境，可以安全修改
             try:
                 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='ignore')
-            except:
+            except Exception:
                 pass
 
 _setup_stdout_encoding()
@@ -181,7 +181,7 @@ class FundFlowAkshareDataFetcher:
                             item[col] = value
                         else:
                             item[col] = str(value)
-                    except:
+                    except Exception:
                         item[col] = "N/A"
                 if item:
                     data_list.append(item)

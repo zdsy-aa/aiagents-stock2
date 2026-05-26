@@ -10,3 +10,26 @@
 /.cursor
 /openspec
 TradEnv/
+
+# 备份文件（应交给 git 管理，不入仓）
+*.bak
+*.pybak
+
+# 日志文件
+*.log
+*.log.*
+
+# SQLite WAL 模式产生的临时文件
+*.db-wal
+*.db-shm
+
+# tdx-api 下载的本地K线数据(持久化卷)
+tdx-data/
+
+# Python 缓存（所有层级）
+__pycache__/
+*.pyc
+
+# 构建产物 / 源码压缩包（所有层级）
+*.exe
+*.rar

@@ -44,7 +44,7 @@ class LowPriceBullService:
             self.holding_days_limit = int(days)
             
             # TDX API配置
-            self.tdx_api_url = os.getenv('TDX_BASE_URL', 'http://127.0.0.1:5000')
+            self.tdx_api_url = os.getenv('TDX_BASE_URL', 'http://127.0.0.1:8080')
             
             self.logger.info(f"监控配置: 扫描间隔={self.scan_interval}秒, 持股天数限制={self.holding_days_limit}天")
             self.logger.info(f"TDX API: {self.tdx_api_url}")

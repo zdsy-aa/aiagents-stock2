@@ -10,6 +10,23 @@ from datetime import datetime
 from main_force_batch_db import batch_db
 
 
+# 历史记录为只增日志，缓存 60s 可显著减少切换/刷新时的重复查询；
+# 视图内删除后调用 .clear() 立即失效，保证不会读到已删数据。
+@st.cache_data(ttl=60)
+def _cached_statistics():
+    return batch_db.get_statistics()
+
+
+@st.cache_data(ttl=60)
+def _cached_history(limit: int = 50):
+    return batch_db.get_all_history(limit=limit)
+
+
+def _clear_history_cache():
+    _cached_statistics.clear()
+    _cached_history.clear()
+
+
 def display_batch_history():
     """显示批量分析历史记录"""
     
@@ -25,8 +42,8 @@ def display_batch_history():
     
     # 获取统计信息
     try:
-        stats = batch_db.get_statistics()
-        
+        stats = _cached_statistics()
+
         # 显示统计指标
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
@@ -47,7 +64,7 @@ def display_batch_history():
     
     # 获取历史记录
     try:
-        history_records = batch_db.get_all_history(limit=50)
+        history_records = _cached_history(limit=50)
         
         if not history_records:
             st.info("📝 暂无批量分析历史记录")
@@ -166,6 +183,7 @@ def display_batch_history():
                 with col_del:
                     if st.button(f"🗑️ 删除此记录", key=f"del_{record['id']}"):
                         if batch_db.delete_record(record['id']):
+                            _clear_history_cache()  # 删除后立即失效缓存
                             st.success("✅ 删除成功")
                             st.rerun()
                         else:

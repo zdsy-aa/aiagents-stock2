@@ -188,7 +188,7 @@ def display_stock_detail(row: pd.Series):
     # 转换价格
     try:
         price_float = float(price) if price and not pd.isna(price) else None
-    except:
+    except Exception:
         price_float = None
     
     if stock_code and stock_name:

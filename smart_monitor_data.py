@@ -32,7 +32,7 @@ class SmartMonitorDataFetcher:
         
         if tdx_base_url is None:
             from config import TDX_CONFIG
-            tdx_base_url = TDX_CONFIG.get('base_url', 'http://192.168.1.222:8181')
+            tdx_base_url = TDX_CONFIG.get('base_url', 'http://127.0.0.1:8080')
         
         self.use_tdx = use_tdx
         self.tdx_fetcher = None

@@ -7,8 +7,11 @@ import pandas as pd
 import sys
 import io
 import warnings
+import logging
 from datetime import datetime, timedelta
 import akshare as ak
+
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings('ignore')
 
@@ -25,8 +28,8 @@ def _setup_stdout_encoding():
             # 不在streamlit环境，可以安全修改
             try:
                 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='ignore')
-            except:
-                pass
+            except Exception:
+                logger.debug("设置stdout编码失败，已忽略", exc_info=True)
 
 _setup_stdout_encoding()
 
@@ -118,7 +121,7 @@ class QStockNewsDataFetcher:
                             # 保存字段
                             try:
                                 item[col] = str(value)
-                            except:
+                            except Exception:
                                 item[col] = "无法解析"
                         
                         if len(item) > 1:  # 如果有数据才添加
@@ -158,12 +161,12 @@ class QStockNewsDataFetcher:
                                             continue
                                         try:
                                             item[col] = str(value)
-                                        except:
+                                        except Exception:
                                             item[col] = "无法解析"
                                     
                                     if len(item) > 1:
                                         news_items.append(item)
-                        except:
+                        except Exception:
                             pass
                 
                 except Exception as e:
@@ -172,9 +175,14 @@ class QStockNewsDataFetcher:
             # 方法3: 尝试获取财联社电报
             if not news_items or len(news_items) < 5:
                 try:
-                    # stock_news_cls() - 财联社电报
-                    df = ak.stock_news_cls()
-                    
+                    # 财联社电报：akshare 1.18+ 接口为 stock_info_global_cls（旧名 stock_news_cls 已移除）
+                    if hasattr(ak, 'stock_info_global_cls'):
+                        df = ak.stock_info_global_cls()
+                    elif hasattr(ak, 'stock_news_cls'):
+                        df = ak.stock_news_cls()
+                    else:
+                        df = None
+
                     if df is not None and not df.empty:
                         # 筛选包含股票代码或名称的新闻
                         df_filtered = df[
@@ -194,7 +202,7 @@ class QStockNewsDataFetcher:
                                         continue
                                     try:
                                         item[col] = str(value)
-                                    except:
+                                    except Exception:
                                         item[col] = "无法解析"
                                 
                                 if len(item) > 1:

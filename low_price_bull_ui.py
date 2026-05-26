@@ -172,7 +172,7 @@ def display_stock_results(stocks_df: pd.DataFrame, selector):
             try:
                 price_float = float(price)
                 price_str = f" | 价格: {price_float:.2f}元"
-            except:
+            except Exception:
                 pass
         
         with st.expander(
@@ -364,7 +364,7 @@ def display_stock_detail(row: pd.Series):
     # 转换价格
     try:
         price_float = float(price) if price and not pd.isna(price) else None
-    except:
+    except Exception:
         price_float = None
     
     if stock_code and stock_name:
@@ -518,7 +518,7 @@ def send_dingtalk_notification(stocks_df: pd.DataFrame, top_n: int):
                 try:
                     price_float = float(price)
                     message_text += f"   - 股价: {price_float:.2f}元\n"
-                except:
+                except Exception:
                     pass
             
             # 净利润增长率
@@ -527,7 +527,7 @@ def send_dingtalk_notification(stocks_df: pd.DataFrame, top_n: int):
                 try:
                     growth_float = float(growth)
                     message_text += f"   - 净利增长: {growth_float:.2f}%\n"
-                except:
+                except Exception:
                     pass
             
             # 成交额
@@ -541,7 +541,7 @@ def send_dingtalk_notification(stocks_df: pd.DataFrame, top_n: int):
                         message_text += f"   - 成交额: {turnover_float/10000:.2f}万元\n"
                     else:
                         message_text += f"   - 成交额: {turnover_float:.2f}元\n"
-                except:
+                except Exception:
                     pass
             
             # 所属行业

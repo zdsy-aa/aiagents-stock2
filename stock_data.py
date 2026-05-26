@@ -103,7 +103,7 @@ class StockDataFetcher:
                             try:
                                 if value and value != '-':
                                     info['market_cap'] = float(value)
-                            except:
+                            except Exception:
                                 pass
                         elif key == '市盈率-动态':
                             try:
@@ -111,7 +111,7 @@ class StockDataFetcher:
                                     pe_value = float(value)
                                     if 0 < pe_value <= 1000:
                                         info['pe_ratio'] = pe_value
-                            except:
+                            except Exception:
                                 pass
                         elif key == '市净率':
                             try:
@@ -119,7 +119,7 @@ class StockDataFetcher:
                                     pb_value = float(value)
                                     if 0 < pb_value <= 100:
                                         info['pb_ratio'] = pb_value
-                            except:
+                            except Exception:
                                 pass
             except Exception as e:
                 print(f"[Akshare] 获取个股详细信息失败: {e}")
@@ -280,7 +280,7 @@ class StockDataFetcher:
                         if market_cap != 'N/A':
                             try:
                                 info['market_cap'] = float(market_cap)
-                            except:
+                            except Exception:
                                 pass
                         
                         # 市盈率
@@ -290,7 +290,7 @@ class StockDataFetcher:
                                 pe_val = float(pe)
                                 if 0 < pe_val <= 1000:
                                     info['pe_ratio'] = pe_val
-                            except:
+                            except Exception:
                                 pass
             except Exception as e:
                 print(f"获取港股实时数据失败: {e}")
@@ -352,7 +352,7 @@ class StockDataFetcher:
                 else:
                     current_price = 'N/A'
                     change_percent = 'N/A'
-            except:
+            except Exception:
                 current_price = 'N/A'
                 change_percent = 'N/A'
             
@@ -467,7 +467,24 @@ class StockDataFetcher:
                 
         except Exception as e:
             return {"error": f"获取中国股票数据失败: {str(e)}"}
-    
+
+    def get_minute_data(self, symbol, freq, limit=240):
+        """获取A股分钟K线，返回标准 OHLCV DataFrame（Date 索引）；失败返回 {"error": ...}。"""
+        try:
+            from akshare_gateway import akshare_gw
+            df = akshare_gw.get_minute_kline(symbol, freq, limit=limit)
+            if df is None or df.empty:
+                return {"error": f"无法获取 {symbol} 的 {freq} 分钟数据"}
+            df = df.rename(columns={
+                '日期': 'Date', '开盘': 'Open', '收盘': 'Close',
+                '最高': 'High', '最低': 'Low', '成交量': 'Volume'
+            })
+            df['Date'] = pd.to_datetime(df['Date'])
+            df.set_index('Date', inplace=True)
+            return df
+        except Exception as e:
+            return {"error": f"获取分钟数据失败: {str(e)}"}
+
     def _get_hk_stock_data(self, symbol, period="1y"):
         """获取港股历史数据"""
         try:
@@ -666,7 +683,7 @@ class StockDataFetcher:
                                 if value is not None and not (isinstance(value, float) and pd.isna(value)):
                                     try:
                                         financial_ratios[indicator_name] = str(value)
-                                    except:
+                                    except Exception:
                                         financial_ratios[indicator_name] = "N/A"
                                 else:
                                     financial_ratios[indicator_name] = "N/A"
@@ -869,7 +886,7 @@ class StockDataFetcher:
                 value = value.replace('%', '').replace(',', '')
                 return float(value)
             return value
-        except:
+        except Exception:
             return value
     
     def _calculate_main_fund_ratio(self, main_fund, total_fund):
@@ -878,6 +895,6 @@ class StockDataFetcher:
             if main_fund != 'N/A' and total_fund != 'N/A' and total_fund != 0:
                 ratio = (main_fund / total_fund) * 100
                 return f"{ratio:.2f}%"
-        except:
+        except Exception:
             pass
         return 'N/A'

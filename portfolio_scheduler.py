@@ -7,12 +7,15 @@
 import schedule
 import threading
 import time
+import logging
 from datetime import datetime
 from typing import Optional, Callable
 import traceback
 
 from portfolio_manager import portfolio_manager
 from notification_service import NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class PortfolioScheduler:
@@ -297,8 +300,8 @@ class PortfolioScheduler:
                         parts = entry_range.split("-")
                         entry_min = float(parts[0].strip())
                         entry_max = float(parts[1].strip())
-                    except:
-                        pass
+                    except (ValueError, IndexError):
+                        logger.debug("解析进场区间失败: %r", entry_range, exc_info=True)
                 
                 # 解析止盈止损（提取数字）
                 import re
@@ -308,16 +311,16 @@ class PortfolioScheduler:
                         numbers = re.findall(r'\d+\.?\d*', str(take_profit_str))
                         if numbers:
                             take_profit = float(numbers[0])
-                    except:
-                        pass
+                    except (ValueError, IndexError):
+                        logger.debug("解析止盈位失败: %r", take_profit_str, exc_info=True)
                 
                 if stop_loss_str:
                     try:
                         numbers = re.findall(r'\d+\.?\d*', str(stop_loss_str))
                         if numbers:
                             stop_loss = float(numbers[0])
-                    except:
-                        pass
+                    except (ValueError, IndexError):
+                        logger.debug("解析止损位失败: %r", stop_loss_str, exc_info=True)
                 
                 # 检查参数有效性
                 if not all([entry_min, entry_max, take_profit, stop_loss]):
