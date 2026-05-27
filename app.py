@@ -75,7 +75,7 @@ def main():
         if st.button("🏠 股票分析-日", width='stretch', key="nav_home", help="返回首页，进行单只股票的日线深度分析"):
             # 清除所有功能页面标志
             for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
-                       'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull', 'show_news_flow', 'show_macro_cycle', 'show_macro_analysis', 'show_value_stock', 'show_intraday']:
+                       'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull', 'show_news_flow', 'show_macro_cycle', 'show_macro_analysis', 'show_value_stock', 'show_intraday', 'show_chanlun']:
                 if key in st.session_state:
                     del st.session_state[key]
 
@@ -86,7 +86,7 @@ def main():
                         'show_sector_strategy', 'show_longhubang', 'show_portfolio',
                         'show_low_price_bull', 'show_small_cap', 'show_profit_growth',
                         'show_value_stock', 'show_news_flow', 'show_macro_analysis',
-                        'show_macro_cycle', 'show_smart_monitor']:
+                        'show_macro_cycle', 'show_smart_monitor', 'show_chanlun']:
                 if key in st.session_state:
                     del st.session_state[key]
 
@@ -128,6 +128,15 @@ def main():
                 st.session_state.show_value_stock = True
                 for key in ['show_history', 'show_monitor', 'show_config', 'show_sector_strategy',
                            'show_longhubang', 'show_portfolio', 'show_main_force', 'show_low_price_bull', 'show_small_cap', 'show_profit_growth', 'show_news_flow', 'show_macro_cycle', 'show_macro_analysis']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+
+            if st.button("🌀 缠论选股", width='stretch', key="nav_chanlun", help="多级别缠论买点筛选（日线本级别+30分钟次级别确认），读每日收盘后预计算结果"):
+                st.session_state.show_chanlun = True
+                for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
+                           'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull',
+                           'show_small_cap', 'show_profit_growth', 'show_value_stock', 'show_news_flow',
+                           'show_macro_analysis', 'show_macro_cycle', 'show_smart_monitor', 'show_intraday']:
                     if key in st.session_state:
                         del st.session_state[key]
 
@@ -367,6 +376,12 @@ def main():
     # 检查是否显示环境配置
     if 'show_config' in st.session_state and st.session_state.show_config:
         display_config_manager()
+        return
+
+    # 检查是否显示缠论选股（放在所有其它 show_* 之后，残留标志不会抢占其它页面）
+    if 'show_chanlun' in st.session_state and st.session_state.show_chanlun:
+        from chanlun_ui import display_chanlun_selector
+        display_chanlun_selector()
         return
 
     # 检查是否显示分时分析（放在所有 show_* 之后、默认日线主界面之前）
