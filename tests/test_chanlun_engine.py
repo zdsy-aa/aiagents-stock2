@@ -102,3 +102,28 @@ def test_build_segments_needs_min_three_strokes():
     rows = [(8,3),(7,2),(12,6),(11,7),(9,4)]
     segs = build_segments(_strokes_from(rows))
     assert segs == [] or all(s.dir in ("up", "down") for s in segs)
+
+
+from chanlun_engine import build_pivots, Segment
+
+
+def test_build_pivots_three_overlapping_segments():
+    segs = [
+        Segment("up", 0, 3, 10, 14),
+        Segment("down", 3, 6, 14, 11),
+        Segment("up", 6, 9, 11, 15),
+    ]
+    pv = build_pivots(segs)
+    assert len(pv) == 1
+    assert pv[0].ZD == 11 and pv[0].ZG == 14   # max low / min high
+    assert pv[0].GG == 15 and pv[0].DD == 10
+
+
+def test_build_pivots_none_when_no_overlap():
+    segs = [
+        Segment("up", 0, 3, 10, 14),
+        Segment("down", 3, 6, 14, 12),
+        Segment("up", 6, 9, 12, 20),
+    ]
+    pv = build_pivots(segs)
+    assert len(pv) <= 1
