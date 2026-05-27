@@ -109,10 +109,21 @@ class FundFlowAkshareDataFetcher:
     def _get_individual_fund_flow(self, symbol, market):
         """获取个股资金流向数据（支持akshare和tushare自动切换）"""
         try:
-            # 优先使用akshare的stock_individual_fund_flow接口
-            print(f"   [Akshare] 正在获取资金流向 (市场: {market})...")
-            
-            df = ak.stock_individual_fund_flow(stock=symbol, market=market)
+            # 东财个股资金流接口在本机被网络/IP层封锁，直连会抛 RemoteDisconnected 并刷 traceback。
+            # 命中网关封锁名单则跳过 akshare 直连，直接走下面的 Tushare 备用源（优雅降级、不刷屏）。
+            try:
+                from akshare_gateway import BLOCKED_EM_FUNCS
+                _blocked = 'stock_individual_fund_flow' in BLOCKED_EM_FUNCS
+            except Exception:
+                _blocked = False
+
+            if _blocked:
+                print(f"   [Akshare] stock_individual_fund_flow 在本机被封锁，跳过直连，转 Tushare 备用源...")
+                df = None
+            else:
+                # 优先使用akshare的stock_individual_fund_flow接口
+                print(f"   [Akshare] 正在获取资金流向 (市场: {market})...")
+                df = ak.stock_individual_fund_flow(stock=symbol, market=market)
             
             if df is None or df.empty:
                 print(f"   [Akshare] 未找到资金流向数据，尝试备用数据源...")
