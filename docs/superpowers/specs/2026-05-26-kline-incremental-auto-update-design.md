@@ -2,7 +2,9 @@
 
 - 日期：2026-05-26
 - 项目：aiagents-stock（route B 本地数据源）
-- 状态：已确认，待写实现计划
+- 状态：**已实现并上线（2026-05-27）**。`scheduler/`（Dockerfile + crontab + update.sh）+ docker-compose `kline-updater` 服务已落地、构建、启动；实跑验证通过（全市场增量 ~176s，覆盖 ~99.7%）。
+- 实现偏差/发现：① `scheduler/Dockerfile` 的 `apk add` 额外装了 **jq**（解析任务接口 JSON）和 **sqlite**（覆盖校验读本地库），spec 原只写 curl+tzdata。② **重要**：tdx-api `pull-kline` 的 `Run()` 对每只票的 `pull` 出错只 `logs.Err` 后 `return`，**任务仍返回 success**——"success" 不保证全部票都更新。实测全市场跑后约 5 只（~0.1%）被静默跳过（热门票如 000001/600519/000002，疑因线上 Streamlit 读占致 SQLite 写锁冲突）。
+- **覆盖校验兜底（已加，超出原 spec）**：`update.sh` 在全量跑成功后，从 `workday.db` 取目标交易日，扫全部 `kline/*.db` 的 `DayKline` 最新日期，把落后/缺数据的票用 **limit=1**（避开并发写锁）重拉，再复扫报告仍落后数。实跑验证：全量成功→扫到 5 只落后→limit=1 补漏→4 只补回、1 只为次新股(sz301669，无任何K线数据)留底记 WARN，符合预期。整轮 ~272s。**坑**：扫描 SQL 的日期格式串必须用单引号 `'%Y%m%d'`；若经 `docker exec sh -c "...\"%Y%m%d\"..."` 转义成双引号，SQLite 会把它当标识符导致 strftime 失败、误报大量"落后"（诊断时踩过，update.sh 脚本内用单引号无此问题）。
 
 ## 背景与目标
 

@@ -66,6 +66,22 @@ services:
     networks:
       - agentsstock-network
 
+  # 定时增量更新本地K线：每天18:00触发 tdx-stock-web 的 pull-kline（引擎层本身增量）
+  # 轻量 alpine + busybox crond，不改 Go 代码/主应用镜像。日志写宿主机 ./tdx-data/update.log
+  kline-updater:
+    build: ./scheduler
+    container_name: kline-updater
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./tdx-data:/data          # update.sh 写 /data/update.log、crond 写 /data/cron.out
+    restart: unless-stopped
+    depends_on:
+      tdx-stock-web:
+        condition: service_started
+    networks:
+      - agentsstock-network
+
 networks:
   agentsstock-network:
     driver: bridge
