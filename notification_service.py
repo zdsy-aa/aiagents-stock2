@@ -793,11 +793,19 @@ _此消息由AI股票分析系统自动发送_"""
             msg.attach(part1)
             msg.attach(part2)
             
-            with smtplib.SMTP(self.config['smtp_server'], self.config['smtp_port']) as server:
+            # 465 为隐式 SSL 端口，须用 SMTP_SSL，且不能再 starttls，否则会卡在握手
+            # （表现为 SMTPServerDisconnected / getreply 超时）；其余端口用 SMTP + starttls。
+            if self.config['smtp_port'] == 465:
+                server = smtplib.SMTP_SSL(self.config['smtp_server'], self.config['smtp_port'], timeout=15)
+            else:
+                server = smtplib.SMTP(self.config['smtp_server'], self.config['smtp_port'], timeout=15)
                 server.starttls()
+            try:
                 server.login(self.config['email_from'], self.config['email_password'])
                 server.send_message(msg)
-            
+            finally:
+                server.quit()
+
             return True
 
         except Exception:

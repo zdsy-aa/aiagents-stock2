@@ -31,3 +31,52 @@ def test_enabled_properties_reflect_config():
     s.config['webhook_enabled'] = True
     assert s.email_enabled is True
     assert s.webhook_enabled is True
+
+
+class _FakeSMTP:
+    """记录用法的假 SMTP，不发任何真实邮件。"""
+    def __init__(self, calls, kind):
+        self.calls = calls
+        calls['kind'] = kind
+    def starttls(self):
+        self.calls['starttls'] = True
+    def login(self, *a):
+        self.calls['login'] = True
+    def send_message(self, *a):
+        self.calls['sent'] = True
+    def quit(self):
+        self.calls['quit'] = True
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+
+def _svc_for_email(monkeypatch, port):
+    """构造一个填好收发件信息、并把 smtplib 替换为假实现的服务。"""
+    import notification_service as ns
+    calls = {}
+    monkeypatch.setattr(ns.smtplib, 'SMTP_SSL', lambda *a, **k: _FakeSMTP(calls, 'ssl'))
+    monkeypatch.setattr(ns.smtplib, 'SMTP', lambda *a, **k: _FakeSMTP(calls, 'plain'))
+    s = _svc_empty()
+    s.config.update({
+        'smtp_server': 'smtp.163.com', 'smtp_port': port,
+        'email_from': 'a@163.com', 'email_password': 'x', 'email_to': 'b@qq.com',
+    })
+    return s, calls
+
+
+def test_send_custom_email_uses_ssl_on_465(monkeypatch):
+    # 465 是隐式 SSL 端口：必须用 SMTP_SSL，且不能再 starttls，否则卡在握手
+    s, calls = _svc_for_email(monkeypatch, 465)
+    assert s._send_custom_email('subj', '<b>h</b>', 't') is True
+    assert calls.get('kind') == 'ssl'
+    assert calls.get('starttls') is None
+
+
+def test_send_custom_email_uses_starttls_on_587(monkeypatch):
+    # 587 是 STARTTLS 端口：用 SMTP + starttls
+    s, calls = _svc_for_email(monkeypatch, 587)
+    assert s._send_custom_email('subj', '<b>h</b>', 't') is True
+    assert calls.get('kind') == 'plain'
+    assert calls.get('starttls') is True
