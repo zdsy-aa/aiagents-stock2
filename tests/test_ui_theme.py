@@ -1,5 +1,6 @@
 # tests/test_ui_theme.py
 from ui_theme import THEME, build_theme_css
+from ui_theme import pct_color, metric_card, badge, section_header
 
 
 def test_theme_has_ashare_semantic_colors():
@@ -21,3 +22,23 @@ def test_build_theme_css_returns_style_block_with_tokens():
     # 卡片/区块标题工具类存在
     assert ".ftc-card" in css
     assert ".ftc-section" in css
+
+
+def test_pct_color_ashare_semantics():
+    assert pct_color(2.3) == THEME["up"]      # 涨→红
+    assert pct_color(-1.1) == THEME["down"]   # 跌→绿
+    assert pct_color(0) == THEME["text_dim"]  # 平→灰
+
+
+def test_metric_card_renders_value_and_colored_change():
+    html = metric_card("收盘", "11.20", change_pct=2.3)
+    assert "ftc-card" in html
+    assert "收盘" in html and "11.20" in html
+    assert THEME["up"] in html      # 涨幅染红
+    assert "+2.3%" in html
+
+
+def test_badge_and_section_header():
+    assert "ftc-badge" in badge("买入", THEME["up"])
+    assert "ftc-section" in section_header("技术面")
+    assert "技术面" in section_header("技术面")

@@ -70,3 +70,48 @@ p, span, label, li {{ color: {t['text']}; }}
 ::-webkit-scrollbar-thumb {{ background: {t['border']}; border-radius: 6px; }}
 ::-webkit-scrollbar-track {{ background: {t['bg']}; }}
 </style>"""
+
+
+import streamlit as st
+
+
+def pct_color(pct: float) -> str:
+    """按 A股惯例：涨红跌绿，平灰。"""
+    if pct > 0:
+        return THEME["up"]
+    if pct < 0:
+        return THEME["down"]
+    return THEME["text_dim"]
+
+
+def metric_card(label: str, value: str, change_pct: float | None = None) -> str:
+    """返回一个深色指标卡 HTML。change_pct 给定时按涨跌染色。"""
+    change_html = ""
+    if change_pct is not None:
+        sign = "+" if change_pct > 0 else ""
+        change_html = (
+            f'<div style="color:{pct_color(change_pct)};font-weight:600;">'
+            f'{sign}{change_pct}%</div>'
+        )
+    return (
+        f'<div class="ftc-card">'
+        f'<div class="ftc-label">{label}</div>'
+        f'<div class="ftc-value">{value}</div>'
+        f'{change_html}</div>'
+    )
+
+
+def badge(text: str, color: str) -> str:
+    return (
+        f'<span class="ftc-badge" '
+        f'style="background:{color}22;color:{color};border:1px solid {color}55;">{text}</span>'
+    )
+
+
+def section_header(title: str) -> str:
+    return f'<div class="ftc-section">{title}</div>'
+
+
+def inject_theme():
+    """在 app.py 启动时调用一次，注入全局深色设计系统。"""
+    st.markdown(build_theme_css(), unsafe_allow_html=True)
