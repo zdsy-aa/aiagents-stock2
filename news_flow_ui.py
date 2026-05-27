@@ -6,6 +6,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
+from ui_theme import style_fig
 import pandas as pd
 from datetime import datetime, timedelta
 import time
@@ -136,6 +137,7 @@ def display_dashboard():
                 margin=dict(l=0, r=0, t=20, b=0),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02)
             )
+            fig = style_fig(fig)
             st.plotly_chart(fig, width='stretch')
             st.caption(f"趋势: {trend.get('trend', '无数据')} - {trend.get('analysis', '')[:50]}...")
         else:
@@ -249,6 +251,7 @@ def display_wordcloud_and_top_news():
                     coloraxis_showscale=False
                 )
                 
+                fig = style_fig(fig)
                 st.plotly_chart(fig, width='stretch', key="wordcloud_chart")
         else:
             st.info("暂无热点词云数据")
@@ -711,6 +714,7 @@ def display_analysis_results(result: dict):
             fig = px.bar(df, x='热度', y='话题', orientation='h',
                         color='热度', color_continuous_scale='Oranges')
             fig.update_layout(height=300, margin=dict(l=0, r=0, t=0, b=0))
+            fig = style_fig(fig)
             st.plotly_chart(fig, width='stretch')
     
     with col2:
@@ -920,6 +924,7 @@ def display_trend_analysis():
                 legend=dict(orientation="h", yanchor="bottom", y=1.02),
                 yaxis_title="流量得分"
             )
+            fig = style_fig(fig)
             st.plotly_chart(fig, width='stretch')
         else:
             st.info("暂无趋势数据")
@@ -968,6 +973,7 @@ def display_trend_analysis():
                 margin=dict(l=0, r=0, t=20, b=0),
                 yaxis_title="情绪指数"
             )
+            fig = style_fig(fig)
             st.plotly_chart(fig, width='stretch')
     else:
         st.info("暂无情绪数据")

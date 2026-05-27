@@ -5,6 +5,7 @@
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from ui_theme import style_fig
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -118,7 +119,8 @@ class SmartMonitorKline:
             fig.update_yaxes(title_text="价格(元)", row=1, col=1)
             if show_volume:
                 fig.update_yaxes(title_text="成交量", row=2, col=1)
-            
+
+            fig = style_fig(fig, kind="kline")
             return fig
             
         except Exception as e:
@@ -306,6 +308,7 @@ class SmartMonitorKline:
             yaxis=dict(visible=False),
             template='plotly_white'
         )
+        fig = style_fig(fig, kind="generic")
         return fig
     
     def get_kline_data(self, stock_code: str, days: int = 60, data_fetcher=None) -> Optional[pd.DataFrame]:
