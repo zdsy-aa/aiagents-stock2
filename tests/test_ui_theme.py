@@ -7,10 +7,10 @@ from ui_theme import style_fig, candle_colors
 
 def test_theme_has_ashare_semantic_colors():
     # A股惯例：涨红跌绿
-    assert THEME["up"] == "#f6465d"
-    assert THEME["down"] == "#0ecb81"
-    assert THEME["bg"] == "#1e242e"
-    assert THEME["accent"] == "#22d3ee"
+    assert THEME["up"] == "#e5384e"
+    assert THEME["down"] == "#0a9d63"
+    assert THEME["bg"] == "#f7f5f0"
+    assert THEME["accent"] == "#0891b2"
 
 
 def test_build_theme_css_returns_style_block_with_tokens():

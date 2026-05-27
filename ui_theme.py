@@ -3,16 +3,16 @@
 全站 16 页同处一次 Streamlit run，启动调一次 inject_theme() 即全继承。"""
 
 THEME = {
-    "bg":        "#1e242e",   # 页底（中度提亮 slate）
-    "panel":     "#272e3a",   # 面板/侧栏
-    "card":      "#313a48",   # 卡片
-    "border":    "#3f4856",
-    "text":      "#f0f3f8",   # 主文字
-    "text_dim":  "#b4bdca",   # 次文字
-    "up":        "#f6465d",   # 涨（A股红）
-    "down":      "#0ecb81",   # 跌（A股绿）
-    "accent":    "#22d3ee",   # 交互强调（青）
-    "gold":      "#f0b90b",   # 点睛
+    "bg":        "#f7f5f0",   # 暖米白页底
+    "panel":     "#fffdf9",   # 面板/侧栏（近白）
+    "card":      "#ffffff",   # 卡片纯白
+    "border":    "#e6e0d4",   # 暖灰边框
+    "text":      "#2b2b2b",   # 主文字（深灰）
+    "text_dim":  "#6b7280",   # 次文字
+    "up":        "#e5384e",   # 涨（A股红，白底加深）
+    "down":      "#0a9d63",   # 跌（A股绿，白底加深）
+    "accent":    "#0891b2",   # 交互强调（青蓝，白底可读）
+    "gold":      "#c98a00",   # 点睛（白底加深）
 }
 
 
@@ -146,7 +146,7 @@ def candle_colors():
 def style_fig(fig, kind: str = "generic"):
     """给 Plotly 图套深色模板：透明底融入卡片、网格弱化、深色字。原地修改并返回。"""
     fig.update_layout(
-        template="plotly_dark",
+        template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color=THEME["text"]),
