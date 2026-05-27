@@ -127,3 +127,20 @@ def test_build_pivots_none_when_no_overlap():
     ]
     pv = build_pivots(segs)
     assert len(pv) <= 1
+
+
+import numpy as np
+from chanlun_engine import compute_macd, seg_macd_power, is_diverging
+
+
+def test_compute_macd_columns():
+    close = pd.Series(np.linspace(10, 20, 60))
+    dif, dea, hist = compute_macd(close)
+    assert len(dif) == 60 and len(dea) == 60 and len(hist) == 60
+
+
+def test_is_diverging_when_later_leg_weaker():
+    hist = pd.Series([0]*5 + [2,3,4,3,2] + [0]*5 + [1,1,1,0,0])
+    assert seg_macd_power(hist, 5, 9) > seg_macd_power(hist, 15, 19)
+    assert is_diverging(seg_macd_power(hist, 15, 19), seg_macd_power(hist, 5, 9)) is True
+    assert is_diverging(seg_macd_power(hist, 5, 9), seg_macd_power(hist, 15, 19)) is False

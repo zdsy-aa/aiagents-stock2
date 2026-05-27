@@ -247,3 +247,28 @@ def build_pivots(segments: List[Segment]) -> List[Pivot]:
         else:
             i += 1
     return pivots
+
+
+def compute_macd(close: pd.Series, fast=12, slow=26, signal=9):
+    """标准 MACD：返回 (dif, dea, hist)。hist = (dif-dea)*2。"""
+    ema_f = close.ewm(span=fast, adjust=False).mean()
+    ema_s = close.ewm(span=slow, adjust=False).mean()
+    dif = ema_f - ema_s
+    dea = dif.ewm(span=signal, adjust=False).mean()
+    hist = (dif - dea) * 2
+    return dif, dea, hist
+
+
+def seg_macd_power(hist: pd.Series, i0: int, i1: int) -> float:
+    """区间 [i0,i1] 内 MACD 柱的绝对面积之和（力度）。"""
+    if i1 < i0:
+        i0, i1 = i1, i0
+    seg = hist.iloc[i0:i1 + 1]
+    return float(seg.abs().sum())
+
+
+def is_diverging(power_late: float, power_prev: float, ratio: float = 0.9) -> bool:
+    """后段力度显著小于前段（< ratio*前段）即判背驰。"""
+    if power_prev <= 0:
+        return False
+    return power_late < ratio * power_prev
