@@ -236,7 +236,9 @@ def build_pivots(segments: List[Segment]) -> List[Pivot]:
             dd = min(s1.low, s2.low, s3.low)
             j = i + 3
             seg_count = 3
-            while j < n and segments[j].low <= zg and segments[j].high >= zd:
+            # 严格重叠才延伸：仅触及边沿(low==zg 或 high==zd)的「离开段」不并入，
+            # 它正是三类买卖点的「离开中枢段」。
+            while j < n and segments[j].low < zg and segments[j].high > zd:
                 gg = max(gg, segments[j].high); dd = min(dd, segments[j].low)
                 seg_count += 1
                 j += 1
@@ -272,3 +274,52 @@ def is_diverging(power_late: float, power_prev: float, ratio: float = 0.9) -> bo
     if power_prev <= 0:
         return False
     return power_late < ratio * power_prev
+
+
+def detect_trade_points(segments: List[Segment], pivots: List[Pivot],
+                        close: pd.Series) -> List[TradePoint]:
+    """单级别 6 类买卖点。close 用于 MACD 背驰（索引与原始行号对齐）。"""
+    pts: List[TradePoint] = []
+    _, _, hist = compute_macd(close)
+
+    def power(seg: Segment) -> float:
+        return seg_macd_power(hist, seg.i_start, seg.i_end)
+
+    # --- 1买/1卖：同向相邻段（中间隔一反向段）的力度背驰 ---
+    for j in range(2, len(segments)):
+        cur, prev = segments[j], segments[j - 2]
+        if cur.dir != prev.dir:
+            continue
+        if cur.dir == "down" and cur.p_end < prev.p_end and is_diverging(power(cur), power(prev)):
+            pts.append(TradePoint("1买", cur.i_end, cur.p_end, "下跌段力度背驰"))
+        if cur.dir == "up" and cur.p_end > prev.p_end and is_diverging(power(cur), power(prev)):
+            pts.append(TradePoint("1卖", cur.i_end, cur.p_end, "上涨段力度背驰"))
+
+    # --- 2买/2卖：1买/1卖之后回踩不破极值 ---
+    one_buys = [p for p in pts if p.kind == "1买"]
+    one_sells = [p for p in pts if p.kind == "1卖"]
+    for ob in one_buys:
+        after = [s for s in segments if s.i_start >= ob.i]
+        for a, b in zip(after, after[1:]):
+            if a.dir == "up" and b.dir == "down" and b.p_end > ob.price:
+                pts.append(TradePoint("2买", b.i_end, b.p_end, "回踩不破1买低点"))
+                break
+    for os_ in one_sells:
+        after = [s for s in segments if s.i_start >= os_.i]
+        for a, b in zip(after, after[1:]):
+            if a.dir == "down" and b.dir == "up" and b.p_end < os_.price:
+                pts.append(TradePoint("2卖", b.i_end, b.p_end, "反弹不创1卖高点"))
+                break
+
+    # --- 3买/3卖：突破中枢后回踩/反抽不破中枢边沿 ---
+    for pv in pivots:
+        after = [s for s in segments if s.i_start >= pv.i_end]
+        for a, b in zip(after, after[1:]):
+            if a.dir == "up" and a.high > pv.ZG and b.dir == "down" and b.low > pv.ZG:
+                pts.append(TradePoint("3买", b.i_end, b.p_end, f"上破中枢ZG={pv.ZG}回踩不破"))
+                break
+            if a.dir == "down" and a.low < pv.ZD and b.dir == "up" and b.high < pv.ZD:
+                pts.append(TradePoint("3卖", b.i_end, b.p_end, f"下破中枢ZD={pv.ZD}反抽不破"))
+                break
+    pts.sort(key=lambda p: p.i)
+    return pts

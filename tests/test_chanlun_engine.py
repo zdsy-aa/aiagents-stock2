@@ -144,3 +144,26 @@ def test_is_diverging_when_later_leg_weaker():
     assert seg_macd_power(hist, 5, 9) > seg_macd_power(hist, 15, 19)
     assert is_diverging(seg_macd_power(hist, 15, 19), seg_macd_power(hist, 5, 9)) is True
     assert is_diverging(seg_macd_power(hist, 5, 9), seg_macd_power(hist, 15, 19)) is False
+
+
+from chanlun_engine import detect_trade_points
+
+
+def test_detect_3buy_after_breakout_pullback():
+    # 中枢 ZG=14；其后一段上破到18，回踩到15(>14)不破 -> 3买
+    segs = [Segment("up", 0, 3, 10, 14), Segment("down", 3, 6, 14, 11), Segment("up", 6, 9, 11, 14),
+            Segment("up", 9, 12, 14, 18), Segment("down", 12, 15, 18, 15)]
+    pivots = build_pivots(segs)
+    close = pd.Series(list(range(10, 10 + 40)))  # 占位，3买不依赖背驰
+    pts = detect_trade_points(segs, pivots, close)
+    assert any(p.kind == "3买" for p in pts)
+
+
+def test_detect_1buy_on_bottom_divergence():
+    # 两段下跌：第二段创新低但 MACD 力度更弱 -> 1买
+    segs = [Segment("down", 0, 5, 20, 12), Segment("up", 5, 8, 12, 15), Segment("down", 8, 13, 15, 10)]
+    pivots = build_pivots(segs)
+    # 首跌陡(大动能)、次跌缓(小动能)但创更低低点 -> 底背驰
+    close = pd.Series([20, 14, 11, 10, 11, 12, 13, 14, 15, 14, 13, 12, 11, 10])
+    pts = detect_trade_points(segs, pivots, close)
+    assert any(p.kind == "1买" for p in pts)
