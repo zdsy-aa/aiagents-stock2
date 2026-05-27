@@ -1233,7 +1233,7 @@ def display_stock_chart(stock_data, stock_info):
             x=stock_data.index,
             y=stock_data['Volume'],
             name="成交量",
-            marker_color='lightblue'
+            marker_color='#0891b2'
         ))
 
         fig_volume.update_layout(
