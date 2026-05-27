@@ -252,12 +252,12 @@ def display_stock_card(stock: Dict):
         # 卡片头部
         st.markdown(f"""
         <div style="
-            border: 1px solid #ddd;
+            border: 1px solid #2a2f3a;
             border-radius: 10px;
             padding: 15px;
             margin: 10px 0;
-            background-color: #f9f9f9;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: #1c2330;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         ">
         """, unsafe_allow_html=True)
         
