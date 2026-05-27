@@ -115,3 +115,30 @@ def section_header(title: str) -> str:
 def inject_theme():
     """在 app.py 启动时调用一次，注入全局深色设计系统。"""
     st.markdown(build_theme_css(), unsafe_allow_html=True)
+
+
+def candle_colors():
+    """K线蜡烛：涨红跌绿（A股）。返回 (increasing, decreasing)。"""
+    return THEME["up"], THEME["down"]
+
+
+def style_fig(fig, kind: str = "generic"):
+    """给 Plotly 图套深色模板：透明底融入卡片、网格弱化、深色字。原地修改并返回。"""
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=THEME["text"]),
+        margin=dict(l=10, r=10, t=30, b=10),
+    )
+    fig.update_xaxes(gridcolor=THEME["border"], zerolinecolor=THEME["border"])
+    fig.update_yaxes(gridcolor=THEME["border"], zerolinecolor=THEME["border"])
+    if kind == "kline":
+        inc, dec = candle_colors()
+        for tr in fig.data:
+            if tr.type == "candlestick":
+                tr.increasing.line.color = inc
+                tr.increasing.fillcolor = inc
+                tr.decreasing.line.color = dec
+                tr.decreasing.fillcolor = dec
+    return fig
