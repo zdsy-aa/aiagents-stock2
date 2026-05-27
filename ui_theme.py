@@ -48,6 +48,27 @@ p, span, label, li {{ color: {t['text']}; }}
 .ftc-up {{ color: {t['up']}; }}
 .ftc-down {{ color: {t['down']}; }}
 
+/* 遗留内联HTML类（app.py 顶部标题栏 + 智能体/决策/风险卡）深色重定义 */
+.top-nav {{
+    background: linear-gradient(135deg, {t['panel']} 0%, {t['card']} 100%);
+    padding: 1.4rem 2rem; border-radius: 14px; margin-bottom: 1.5rem;
+    border: 1px solid {t['border']}; border-left: 4px solid {t['accent']};
+}}
+.nav-title {{ font-size: 2rem; font-weight: 800; color: {t['text']}; text-align: center; margin: 0; letter-spacing: 1px; }}
+.nav-subtitle {{ text-align: center; color: {t['text_dim']}; font-size: 0.95rem; margin-top: 0.5rem; font-weight: 300; }}
+.agent-card {{
+    background: {t['card']}; padding: 1.3rem; border-radius: 12px; margin: 1rem 0;
+    border: 1px solid {t['border']}; border-left: 4px solid {t['accent']};
+}}
+.decision-card {{
+    background: {t['card']}; padding: 1.6rem; border-radius: 12px; margin: 1.2rem 0;
+    border: 1px solid {t['border']}; border-left: 4px solid {t['accent']};
+}}
+.warning-card {{
+    background: {t['card']}; padding: 1.3rem; border-radius: 12px; margin: 1rem 0;
+    border: 1px solid {t['border']}; border-left: 4px solid {t['gold']};
+}}
+
 /* 按钮 */
 .stButton > button {{
     background: {t['card']}; color: {t['text']}; border: 1px solid {t['border']}; border-radius: 8px;
