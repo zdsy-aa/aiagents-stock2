@@ -82,6 +82,35 @@ services:
     networks:
       - agentsstock-network
 
+  # 缠论信号每日自动重算 sidecar：复用主应用镜像（含 python 与缠论模块），
+  # 每天 20:00（kline-updater 18:00 增量更新完成之后）跑 chanlun_batch，
+  # 把全市场近7交易日买点重算落库到 data/chanlun_signals.db，供「缠论选股」页只读。
+  # 仅挂卷+改启动命令，不单独构建镜像（与 aktools 同思路）。
+  chanlun-updater:
+    image: aiagents-stock-app
+    container_name: chanlun-updater
+    command: ["sh", "/app/chanlun_schedule.sh"]
+    environment:
+      - TZ=Asia/Shanghai
+      - LOCAL_DB_DIR=/app/tdx-data/database/kline
+      - CHANLUN_RUN_AT=20:00
+    volumes:
+      - ./data:/app/data                 # 写 chanlun_signals.db / chanlun_update.log
+      - ./.env:/app/.env                 # 网关初始化读 API 配置（与主应用一致）
+      - ./tdx-data:/app/tdx-data:ro      # 只读本地K线（route B 数据源）
+      - ./chanlun_schedule.sh:/app/chanlun_schedule.sh:ro
+    # 本容器不跑 streamlit，禁用镜像继承的 8503 健康检查（否则恒为 unhealthy）
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    depends_on:
+      tdx-stock-web:
+        condition: service_healthy
+      aktools:
+        condition: service_healthy
+    networks:
+      - agentsstock-network
+
 networks:
   agentsstock-network:
     driver: bridge
