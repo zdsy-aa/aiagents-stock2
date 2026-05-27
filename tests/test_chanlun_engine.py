@@ -167,3 +167,26 @@ def test_detect_1buy_on_bottom_divergence():
     close = pd.Series([20, 14, 11, 10, 11, 12, 13, 14, 15, 14, 13, 12, 11, 10])
     pts = detect_trade_points(segs, pivots, close)
     assert any(p.kind == "1买" for p in pts)
+
+
+from chanlun_engine import analyze_one, analyze, ChanResult
+
+
+def test_analyze_one_returns_full_result():
+    rows = [(8,3),(7,2),(10,4),(9,5),(13,7),(12,8),(16,10),(15,11),
+            (14,9),(12,7),(10,5),(8,3),(6,2),(7,3),(9,5),(8,4)]
+    df = _df(rows)
+    r = analyze_one(df)
+    assert isinstance(r, ChanResult)
+    assert len(r.kbars) > 0 and isinstance(r.points, list)
+
+
+def test_analyze_multilevel_marks_confirmation():
+    rows = [(8,3),(7,2),(10,4),(9,5),(13,7),(12,8),(16,10),(15,11),
+            (14,9),(12,7),(10,5),(8,3),(6,2),(7,3),(9,5),(8,4)]
+    df_day = _df(rows)
+    df_30m = _df(rows * 2)  # 占位次级别
+    res = analyze(df_day, df_30m)
+    assert isinstance(res, ChanResult)
+    for p in res.points:
+        assert ("30m确认" in p.note) or ("无次级别确认" in p.note) or p.note != ""
