@@ -142,14 +142,81 @@ def build_strokes(fractals: List[Fractal]) -> List[Stroke]:
                 seq[-1] = f
         else:
             seq.append(f)
-    # 2) 连笔，跳过间隔不足
+    # 2) 强制间隔：间隔不足时丢掉该转折并在同类相邻分型间取极端，保持严格顶底交替
+    changed = True
+    while changed and len(seq) >= 2:
+        changed = False
+        out: List[Fractal] = [seq[0]]
+        k = 1
+        while k < len(seq):
+            if seq[k].k - out[-1].k >= _MIN_K_GAP:
+                out.append(seq[k]); k += 1
+            else:
+                changed = True
+                if k + 1 < len(seq):
+                    a, c = out[-1], seq[k + 1]   # a 与 c 同类（seq 交替）
+                    if (a.kind == "top" and c.price > a.price) or \
+                       (a.kind == "bottom" and c.price < a.price):
+                        out[-1] = c
+                    k += 2
+                else:
+                    k += 1  # 末尾间隔不足，丢弃
+        seq = out
+    # 3) 由严格交替的分型连笔
     strokes: List[Stroke] = []
-    i = 0
-    while i + 1 < len(seq):
-        a, b = seq[i], seq[i + 1]
-        if b.k - a.k >= _MIN_K_GAP:
-            strokes.append(Stroke(dir="up" if a.kind == "bottom" else "down", start=a, end=b))
-            i += 1
-        else:
-            del seq[i + 1]
+    for a, b in zip(seq, seq[1:]):
+        strokes.append(Stroke(dir="up" if a.kind == "bottom" else "down", start=a, end=b))
     return strokes
+
+
+def build_segments(strokes: List[Stroke]) -> List[Segment]:
+    """线段划分（趋势分段法）：笔严格顶底交替，其端点构成锯齿。
+    上升线段在「更高的高点 + 更高的低点」中延续；当某个低点跌破前一个低点时，
+    线段在此前的最高点处结束、反转为下降线段（下降对称）。给出方向清晰的线段序列。"""
+    if len(strokes) < 3:
+        return []
+    # 端点序列（与笔交替）：[(i, price), ...]
+    pts = [(strokes[0].start.i, strokes[0].start.price)]
+    for s in strokes:
+        pts.append((s.end.i, s.end.price))
+    n = len(pts)
+    first_up = strokes[0].dir == "up"  # True: 奇数下标为高点；False: 偶数下标为高点
+
+    def is_high(idx: int) -> bool:
+        return (idx % 2 == 1) if first_up else (idx % 2 == 0)
+
+    segs: List[Segment] = []
+    seg_start = 0
+    seg_dir: Direction = "up" if pts[1][1] > pts[0][1] else "down"
+    seg_extreme = 0                       # 当前线段方向上的极值端点下标
+    last_high_idx: Optional[int] = None
+    last_low_idx: Optional[int] = None
+
+    for idx in range(1, n):
+        price = pts[idx][1]
+        if is_high(idx):
+            if seg_dir == "up":
+                if last_high_idx is None or price >= pts[seg_extreme][1]:
+                    seg_extreme = idx     # 续创新高
+            else:
+                if last_high_idx is not None and price > pts[last_high_idx][1]:
+                    # 下降段中高点升破前高 → 反转为上升，下降段在其最低点结束
+                    segs.append(Segment("down", pts[seg_start][0], pts[seg_extreme][0],
+                                        pts[seg_start][1], pts[seg_extreme][1]))
+                    seg_dir = "up"; seg_start = seg_extreme; seg_extreme = idx
+            last_high_idx = idx
+        else:
+            if seg_dir == "down":
+                if last_low_idx is None or price <= pts[seg_extreme][1]:
+                    seg_extreme = idx     # 续创新低
+            else:
+                if last_low_idx is not None and price < pts[last_low_idx][1]:
+                    # 上升段中低点跌破前低 → 反转为下降，上升段在其最高点结束
+                    segs.append(Segment("up", pts[seg_start][0], pts[seg_extreme][0],
+                                        pts[seg_start][1], pts[seg_extreme][1]))
+                    seg_dir = "down"; seg_start = seg_extreme; seg_extreme = idx
+            last_low_idx = idx
+
+    segs.append(Segment(seg_dir, pts[seg_start][0], pts[seg_extreme][0],
+                        pts[seg_start][1], pts[seg_extreme][1]))
+    return [s for s in segs if s.i_start != s.i_end]
