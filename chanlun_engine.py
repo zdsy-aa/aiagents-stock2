@@ -124,3 +124,32 @@ def find_fractals(ks: List[KBar]) -> List[Fractal]:
         elif b.low < a.low and b.low < c.low:
             fs.append(Fractal(kind="bottom", k=k, i=b.i_hi, price=b.low))
     return fs
+
+
+_MIN_K_GAP = 3  # 一笔两端分型在 KBar 序列上至少相隔 3（含独立K约束）
+
+
+def build_strokes(fractals: List[Fractal]) -> List[Stroke]:
+    """由交替的顶/底分型连成笔。同向连续分型取更极端者；间隔不足的丢弃。"""
+    if len(fractals) < 2:
+        return []
+    # 1) 规整：保证顶底交替，同向取极端
+    seq: List[Fractal] = [fractals[0]]
+    for f in fractals[1:]:
+        last = seq[-1]
+        if f.kind == last.kind:
+            if (f.kind == "top" and f.price > last.price) or (f.kind == "bottom" and f.price < last.price):
+                seq[-1] = f
+        else:
+            seq.append(f)
+    # 2) 连笔，跳过间隔不足
+    strokes: List[Stroke] = []
+    i = 0
+    while i + 1 < len(seq):
+        a, b = seq[i], seq[i + 1]
+        if b.k - a.k >= _MIN_K_GAP:
+            strokes.append(Stroke(dir="up" if a.kind == "bottom" else "down", start=a, end=b))
+            i += 1
+        else:
+            del seq[i + 1]
+    return strokes
