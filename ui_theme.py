@@ -1,0 +1,72 @@
+# ui_theme.py
+"""深色 Fintech 全局设计系统：主题色板、全局 CSS、可复用组件、Plotly 深色模板。
+全站 16 页同处一次 Streamlit run，启动调一次 inject_theme() 即全继承。"""
+
+THEME = {
+    "bg":        "#0e1117",   # 页底
+    "panel":     "#161b22",   # 面板/侧栏
+    "card":      "#1c2330",   # 卡片
+    "border":    "#2a2f3a",
+    "text":      "#e6e9ef",   # 主文字
+    "text_dim":  "#9aa4b2",   # 次文字
+    "up":        "#f6465d",   # 涨（A股红）
+    "down":      "#0ecb81",   # 跌（A股绿）
+    "accent":    "#22d3ee",   # 交互强调（青）
+    "gold":      "#f0b90b",   # 点睛
+}
+
+
+def build_theme_css() -> str:
+    """返回完整 <style> 字符串（纯函数，便于测试）。"""
+    t = THEME
+    return f"""<style>
+/* ===== 深色 Fintech 设计系统 ===== */
+.stApp {{ background: {t['bg']}; color: {t['text']}; }}
+section[data-testid="stSidebar"] {{ background: {t['panel']}; border-right: 1px solid {t['border']}; }}
+h1, h2, h3, h4 {{ color: {t['text']}; }}
+p, span, label, li {{ color: {t['text']}; }}
+.stCaption, [data-testid="stCaptionContainer"] {{ color: {t['text_dim']} !important; }}
+
+/* 卡片 */
+.ftc-card {{
+    background: {t['card']}; border: 1px solid {t['border']}; border-radius: 12px;
+    padding: 16px 18px; margin: 8px 0;
+}}
+.ftc-card .ftc-label {{ color: {t['text_dim']}; font-size: 0.8rem; }}
+.ftc-card .ftc-value {{ color: {t['text']}; font-size: 1.5rem; font-weight: 700; }}
+
+/* 区块标题：左侧强调色竖条 */
+.ftc-section {{
+    border-left: 4px solid {t['accent']}; padding-left: 10px; margin: 18px 0 8px;
+    font-size: 1.15rem; font-weight: 700; color: {t['text']};
+}}
+
+/* 徽章 */
+.ftc-badge {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.8rem; font-weight:600; }}
+
+/* 涨跌语义色工具类 */
+.ftc-up {{ color: {t['up']}; }}
+.ftc-down {{ color: {t['down']}; }}
+
+/* 按钮 */
+.stButton > button {{
+    background: {t['card']}; color: {t['text']}; border: 1px solid {t['border']}; border-radius: 8px;
+}}
+.stButton > button:hover {{ border-color: {t['accent']}; color: {t['accent']}; }}
+
+/* 输入 / 选择框 */
+[data-testid="stMetric"], .stDateInput, .stTextInput, .stSelectbox {{ color: {t['text']}; }}
+
+/* 表格 */
+[data-testid="stDataFrame"] {{ border: 1px solid {t['border']}; border-radius: 8px; }}
+
+/* expander / tabs */
+[data-testid="stExpander"] {{ border: 1px solid {t['border']}; border-radius: 10px; background: {t['panel']}; }}
+.stTabs [data-baseweb="tab-list"] {{ border-bottom: 1px solid {t['border']}; }}
+.stTabs [aria-selected="true"] {{ color: {t['accent']}; }}
+
+/* 滚动条 */
+::-webkit-scrollbar {{ width: 10px; height: 10px; }}
+::-webkit-scrollbar-thumb {{ background: {t['border']}; border-radius: 6px; }}
+::-webkit-scrollbar-track {{ background: {t['bg']}; }}
+</style>"""
