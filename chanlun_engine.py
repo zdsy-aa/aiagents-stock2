@@ -323,3 +323,29 @@ def detect_trade_points(segments: List[Segment], pivots: List[Pivot],
                 break
     pts.sort(key=lambda p: p.i)
     return pts
+
+
+def analyze_one(df: pd.DataFrame) -> ChanResult:
+    ks = merge_inclusion(df)
+    fs = find_fractals(ks)
+    sts = build_strokes(fs)
+    segs = build_segments(sts)
+    pvs = build_pivots(segs)
+    close = df["Close"].reset_index(drop=True)
+    pts = detect_trade_points(segs, pvs, close)
+    return ChanResult(kbars=ks, fractals=fs, strokes=sts, segments=segs, pivots=pvs, points=pts)
+
+
+def analyze(df_day: pd.DataFrame, df_30m: Optional[pd.DataFrame] = None) -> ChanResult:
+    """日线为本级别；30分钟次级别同类型买卖点确认。"""
+    day = analyze_one(df_day)
+    if df_30m is None or len(df_30m) < 20:
+        for p in day.points:
+            p.note = (p.note + "；无次级别确认").strip("；")
+        return day
+    sub = analyze_one(df_30m)
+    sub_kinds = {p.kind for p in sub.points}
+    for p in day.points:
+        confirmed = p.kind in sub_kinds
+        p.note = (p.note + ("；30m确认" if confirmed else "；无次级别确认")).strip("；")
+    return day
