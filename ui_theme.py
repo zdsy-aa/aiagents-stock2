@@ -3,12 +3,12 @@
 全站 16 页同处一次 Streamlit run，启动调一次 inject_theme() 即全继承。"""
 
 THEME = {
-    "bg":        "#0e1117",   # 页底
-    "panel":     "#161b22",   # 面板/侧栏
-    "card":      "#1c2330",   # 卡片
-    "border":    "#2a2f3a",
-    "text":      "#e6e9ef",   # 主文字
-    "text_dim":  "#9aa4b2",   # 次文字
+    "bg":        "#1e242e",   # 页底（中度提亮 slate）
+    "panel":     "#272e3a",   # 面板/侧栏
+    "card":      "#313a48",   # 卡片
+    "border":    "#3f4856",
+    "text":      "#f0f3f8",   # 主文字
+    "text_dim":  "#b4bdca",   # 次文字
     "up":        "#f6465d",   # 涨（A股红）
     "down":      "#0ecb81",   # 跌（A股绿）
     "accent":    "#22d3ee",   # 交互强调（青）

@@ -9,7 +9,7 @@ def test_theme_has_ashare_semantic_colors():
     # A股惯例：涨红跌绿
     assert THEME["up"] == "#f6465d"
     assert THEME["down"] == "#0ecb81"
-    assert THEME["bg"] == "#0e1117"
+    assert THEME["bg"] == "#1e242e"
     assert THEME["accent"] == "#22d3ee"
 
 
