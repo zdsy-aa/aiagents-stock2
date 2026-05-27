@@ -220,3 +220,30 @@ def build_segments(strokes: List[Stroke]) -> List[Segment]:
     segs.append(Segment(seg_dir, pts[seg_start][0], pts[seg_extreme][0],
                         pts[seg_start][1], pts[seg_extreme][1]))
     return [s for s in segs if s.i_start != s.i_end]
+
+
+def build_pivots(segments: List[Segment]) -> List[Pivot]:
+    """连续≥3段重叠构成中枢；重叠继续则延伸，断开则结束并尝试新中枢。"""
+    pivots: List[Pivot] = []
+    n = len(segments)
+    i = 0
+    while i + 2 < n:
+        s1, s2, s3 = segments[i], segments[i + 1], segments[i + 2]
+        zd = max(s1.low, s2.low, s3.low)
+        zg = min(s1.high, s2.high, s3.high)
+        if zd <= zg:
+            gg = max(s1.high, s2.high, s3.high)
+            dd = min(s1.low, s2.low, s3.low)
+            j = i + 3
+            seg_count = 3
+            while j < n and segments[j].low <= zg and segments[j].high >= zd:
+                gg = max(gg, segments[j].high); dd = min(dd, segments[j].low)
+                seg_count += 1
+                j += 1
+            pivots.append(Pivot(ZG=zg, ZD=zd, GG=gg, DD=dd,
+                                i_start=s1.i_start, i_end=segments[j - 1].i_end,
+                                seg_count=seg_count))
+            i = j  # 中枢后从断开段继续
+        else:
+            i += 1
+    return pivots
