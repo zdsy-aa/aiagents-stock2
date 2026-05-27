@@ -29,6 +29,7 @@ PAGE_FLAGS = [
     "show_small_cap", "show_profit_growth", "show_value_stock", "show_sector_strategy",
     "show_longhubang", "show_smart_monitor", "show_portfolio", "show_news_flow",
     "show_macro_analysis", "show_macro_cycle", "show_config", "show_intraday",
+    "show_chanlun",
 ]
 
 
