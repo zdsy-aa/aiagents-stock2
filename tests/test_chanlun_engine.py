@@ -36,3 +36,26 @@ def test_find_fractals_top_and_bottom():
     kinds = [(f.kind, round(f.price, 1)) for f in fs]
     assert ("top", 12.0) in kinds
     assert ("top", 13.0) in kinds
+
+
+from chanlun_engine import build_strokes
+
+
+def test_build_strokes_alternating_and_gap():
+    rows = [(8,3),(7,2),(9,4),(10,5),(12,6),(13,8),(11,6),(10,5),(9,4),(7,2),(8,3)]
+    df = _df(rows)
+    ks = merge_inclusion(df)
+    sts = build_strokes(find_fractals(ks))
+    assert len(sts) >= 2
+    assert sts[0].dir in ("up", "down")
+    for a, b in zip(sts, sts[1:]):
+        assert a.dir != b.dir
+
+
+def test_build_strokes_skips_too_close_fractals():
+    rows = [(10,5),(12,7),(8,4),(13,9)]
+    df = _df(rows)
+    ks = merge_inclusion(df)
+    sts = build_strokes(find_fractals(ks))
+    for s in sts:
+        assert s.end.k - s.start.k >= 3
