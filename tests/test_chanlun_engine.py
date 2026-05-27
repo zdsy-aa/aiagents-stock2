@@ -24,3 +24,15 @@ def test_merge_inclusion_no_inclusion_passthrough():
     df = _df([(10, 5), (12, 7), (14, 9)])
     ks = merge_inclusion(df)
     assert [(k.high, k.low) for k in ks] == [(10, 5), (12, 7), (14, 9)]
+
+
+from chanlun_engine import find_fractals
+
+
+def test_find_fractals_top_and_bottom():
+    df = _df([(10, 5), (12, 7), (11, 6), (13, 8), (9, 4)])
+    ks = merge_inclusion(df)
+    fs = find_fractals(ks)
+    kinds = [(f.kind, round(f.price, 1)) for f in fs]
+    assert ("top", 12.0) in kinds
+    assert ("top", 13.0) in kinds

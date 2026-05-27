@@ -112,3 +112,15 @@ def merge_inclusion(df: pd.DataFrame) -> List[KBar]:
             d: Direction = "up" if h > last.high else "down"
             ks.append(KBar(high=h, low=l, i_lo=i, i_hi=i, dir=d))
     return ks
+
+
+def find_fractals(ks: List[KBar]) -> List[Fractal]:
+    """在无包含K线序列上识别顶/底分型（标准三K分型）。"""
+    fs: List[Fractal] = []
+    for k in range(1, len(ks) - 1):
+        a, b, c = ks[k - 1], ks[k], ks[k + 1]
+        if b.high > a.high and b.high > c.high:
+            fs.append(Fractal(kind="top", k=k, i=b.i_hi, price=b.high))
+        elif b.low < a.low and b.low < c.low:
+            fs.append(Fractal(kind="bottom", k=k, i=b.i_hi, price=b.low))
+    return fs
