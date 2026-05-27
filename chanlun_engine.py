@@ -349,3 +349,22 @@ def analyze(df_day: pd.DataFrame, df_30m: Optional[pd.DataFrame] = None) -> Chan
         confirmed = p.kind in sub_kinds
         p.note = (p.note + ("；30m确认" if confirmed else "；无次级别确认")).strip("；")
     return day
+
+
+def buy_point_with_exit(bp: TradePoint, pivots: List[Pivot]) -> dict:
+    """把一个买点打包成含止损/离场条件的 dict。"""
+    nearest_zd = None
+    for pv in pivots:
+        if pv.i_end <= bp.i:
+            nearest_zd = pv.ZD
+    base_stop = bp.price * 0.98
+    stop = min(base_stop, nearest_zd) if nearest_zd is not None else base_stop
+    exit_rule = ("出现日线级别一卖(顶背驰,30m确认)或二卖(反弹不创新高)或三卖"
+                 "(跌破中枢ZD后反抽不破)；或跌破止损位离场")
+    return {
+        "signal_type": bp.kind,
+        "buy_price": round(float(bp.price), 3),
+        "stop_loss": round(float(stop), 3),
+        "exit_rule": exit_rule,
+        "note": bp.note,
+    }

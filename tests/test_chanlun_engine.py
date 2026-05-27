@@ -190,3 +190,16 @@ def test_analyze_multilevel_marks_confirmation():
     assert isinstance(res, ChanResult)
     for p in res.points:
         assert ("30m确认" in p.note) or ("无次级别确认" in p.note) or p.note != ""
+
+
+from chanlun_engine import buy_point_with_exit, TradePoint, Pivot
+
+
+def test_buy_point_with_exit_fields():
+    bp = TradePoint("1买", 12, 10.0, "下跌段力度背驰")
+    pivots = [Pivot(ZG=14, ZD=11, GG=16, DD=9, i_start=0, i_end=8, seg_count=3)]
+    info = buy_point_with_exit(bp, pivots)
+    assert info["signal_type"] == "1买"
+    assert info["buy_price"] == 10.0
+    assert info["stop_loss"] <= 10.0           # 止损不高于买点
+    assert isinstance(info["exit_rule"], str) and len(info["exit_rule"]) > 0
