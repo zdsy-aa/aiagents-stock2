@@ -150,7 +150,8 @@ class LocalDBClient:
     """本地下载K线数据源（第0优先级，最高）
 
     读取 tdx-api `pull-kline` 落地的 SQLite 文件，实现真正的本地/离线数据。
-    目录结构：<base_dir>/<6位代码>.db
+    目录结构：<base_dir>/<代码>.db，文件名兼容裸代码（600519.db）与
+    带市场前缀（sh600519.db / sz000001.db / bj920000.db）两种命名。
     表名：DayKline / WeekKline / MonthKline / Minute1Kline / Minute5Kline /
           Minute15Kline / Minute30Kline / HourKline
     列：Code, Date(unix秒,UTC), Open, High, Low, Close, Volume, Amount（价格×1000）
@@ -177,6 +178,12 @@ class LocalDBClient:
 
     def _db_path(self, symbol):
         code = str(symbol).split('.')[0]
+        # 兼容裸代码与带市场前缀两种文件名（tdx-api 批量下载用前缀名）：
+        # 命中第一个存在的；都不存在时返回裸名占位，交由 get_kline 的 exists 检查降级。
+        for fname in (f"{code}.db", f"sh{code}.db", f"sz{code}.db", f"bj{code}.db"):
+            p = os.path.join(self.base_dir, fname)
+            if os.path.exists(p):
+                return p
         return os.path.join(self.base_dir, f"{code}.db")
 
     def get_kline(self, symbol, kline_type='day', limit=None, start_date=None, end_date=None):
