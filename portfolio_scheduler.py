@@ -61,14 +61,14 @@ class PortfolioScheduler:
             # 验证时间格式
             datetime.strptime(time_str, "%H:%M")
             self.schedule_times = [time_str]
-            print(f"[OK] 设置定时分析时间: {time_str}")
+            logger.info(f"[OK] 设置定时分析时间: {time_str}")
             
             # 如果调度器正在运行，重新调度
             if self._is_running:
                 self._reschedule()
                 
         except ValueError:
-            print(f"[ERROR] 无效的时间格式: {time_str}，应为 HH:MM")
+            logger.error(f"[ERROR] 无效的时间格式: {time_str}，应为 HH:MM")
     
     def add_schedule_time(self, time_str: str) -> bool:
         """
@@ -86,12 +86,12 @@ class PortfolioScheduler:
             
             # 检查是否已存在
             if time_str in self.schedule_times:
-                print(f"[WARN] 定时时间 {time_str} 已存在")
+                logger.warning(f"[WARN] 定时时间 {time_str} 已存在")
                 return False
             
             self.schedule_times.append(time_str)
             self.schedule_times.sort()  # 保持时间顺序
-            print(f"[OK] 添加定时时间: {time_str}")
+            logger.info(f"[OK] 添加定时时间: {time_str}")
             
             # 如果调度器正在运行，重新调度
             if self._is_running:
@@ -100,7 +100,7 @@ class PortfolioScheduler:
             return True
             
         except ValueError:
-            print(f"[ERROR] 无效的时间格式: {time_str}，应为 HH:MM")
+            logger.error(f"[ERROR] 无效的时间格式: {time_str}，应为 HH:MM")
             return False
     
     def remove_schedule_time(self, time_str: str) -> bool:
@@ -115,7 +115,7 @@ class PortfolioScheduler:
         """
         if time_str in self.schedule_times:
             self.schedule_times.remove(time_str)
-            print(f"[OK] 删除定时时间: {time_str}")
+            logger.info(f"[OK] 删除定时时间: {time_str}")
             
             # 如果调度器正在运行，重新调度
             if self._is_running:
@@ -123,7 +123,7 @@ class PortfolioScheduler:
             
             return True
         else:
-            print(f"[WARN] 定时时间 {time_str} 不存在")
+            logger.warning(f"[WARN] 定时时间 {time_str} 不存在")
             return False
     
     def get_schedule_times(self) -> list:
@@ -148,17 +148,17 @@ class PortfolioScheduler:
                 datetime.strptime(time_str, "%H:%M")
                 valid_times.append(time_str)
             except ValueError:
-                print(f"[WARN] 跳过无效时间: {time_str}")
+                logger.warning(f"[WARN] 跳过无效时间: {time_str}")
         
         if valid_times:
             self.schedule_times = sorted(valid_times)
-            print(f"[OK] 设置定时时间: {', '.join(self.schedule_times)}")
+            logger.info(f"[OK] 设置定时时间: {', '.join(self.schedule_times)}")
             
             # 如果调度器正在运行，重新调度
             if self._is_running:
                 self._reschedule()
         else:
-            print(f"[ERROR] 没有有效的时间配置")
+            logger.error(f"[ERROR] 没有有效的时间配置")
     
     def set_analysis_mode(self, mode: str):
         """
@@ -169,37 +169,37 @@ class PortfolioScheduler:
         """
         if mode in ["sequential", "parallel"]:
             self.analysis_mode = mode
-            print(f"[OK] 设置分析模式: {mode}")
+            logger.info(f"[OK] 设置分析模式: {mode}")
         else:
-            print(f"[ERROR] 无效的分析模式: {mode}")
+            logger.error(f"[ERROR] 无效的分析模式: {mode}")
     
     def set_auto_monitor_sync(self, enabled: bool):
         """设置是否启用自动监测同步"""
         self.auto_monitor_sync = enabled
-        print(f"[OK] 自动监测同步: {'启用' if enabled else '禁用'}")
+        logger.info(f"[OK] 自动监测同步: {'启用' if enabled else '禁用'}")
     
     def set_notification_enabled(self, enabled: bool):
         """设置是否启用通知"""
         self.notification_enabled = enabled
-        print(f"[OK] 通知推送: {'启用' if enabled else '禁用'}")
+        logger.info(f"[OK] 通知推送: {'启用' if enabled else '禁用'}")
     
     def set_selected_agents(self, agents: Optional[list]):
         """设置参与分析的AI分析师"""
         self.selected_agents = agents
         if agents:
-            print(f"[OK] 选择分析师: {', '.join(agents)}")
+            logger.info(f"[OK] 选择分析师: {', '.join(agents)}")
         else:
-            print("[OK] 选择分析师: 全部")
+            logger.info("[OK] 选择分析师: 全部")
     
     def _scheduled_job(self):
         """定时任务执行的作业"""
-        print("\n" + "="*60)
-        print(f"定时分析开始: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("="*60 + "\n")
+        logger.info("\n" + "="*60)
+        logger.info(f"定时分析开始: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("="*60 + "\n")
         
         try:
             # 1. 执行批量分析
-            print("[1/4] 执行持仓批量分析...")
+            logger.info("[1/4] 执行持仓批量分析...")
             analysis_results = portfolio_manager.batch_analyze_portfolio(
                 mode=self.analysis_mode,
                 max_workers=self.max_workers,
@@ -208,7 +208,7 @@ class PortfolioScheduler:
             
             if not analysis_results.get("success"):
                 error_msg = analysis_results.get("error", "未知错误")
-                print(f"[ERROR] 批量分析失败: {error_msg}")
+                logger.error(f"[ERROR] 批量分析失败: {error_msg}")
                 
                 # 发送错误通知
                 if self.notification_enabled:
@@ -218,34 +218,34 @@ class PortfolioScheduler:
                 return
             
             # 2. 保存分析结果
-            print("\n[2/4] 保存分析结果...")
+            logger.info("\n[2/4] 保存分析结果...")
             saved_ids = portfolio_manager.save_analysis_results(analysis_results)
-            print(f"[OK] 保存 {len(saved_ids)} 条分析记录")
+            logger.info(f"[OK] 保存 {len(saved_ids)} 条分析记录")
             
             # 3. 自动监测同步
             sync_result = None
             if self.auto_monitor_sync:
-                print("\n[3/4] 自动同步到监测列表...")
+                logger.info("\n[3/4] 自动同步到监测列表...")
                 sync_result = self._sync_to_monitor(analysis_results)
             else:
-                print("\n[3/4] 跳过监测同步（已禁用）")
+                logger.warning("\n[3/4] 跳过监测同步（已禁用）")
             
             # 4. 发送通知
             if self.notification_enabled:
-                print("\n[4/4] 发送通知...")
+                logger.info("\n[4/4] 发送通知...")
                 self._send_notification(analysis_results, sync_result)
             else:
-                print("\n[4/4] 跳过通知发送（已禁用）")
+                logger.warning("\n[4/4] 跳过通知发送（已禁用）")
             
             # 更新运行时间
             self.last_run_time = datetime.now()
             
-            print("\n" + "="*60)
-            print(f"定时分析完成: {self.last_run_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print("="*60 + "\n")
+            logger.info("\n" + "="*60)
+            logger.info(f"定时分析完成: {self.last_run_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("="*60 + "\n")
             
         except Exception as e:
-            print(f"\n[ERROR] 定时任务执行异常: {str(e)}")
+            logger.error(f"\n[ERROR] 定时任务执行异常: {str(e)}")
             traceback.print_exc()
             
             # 发送错误通知
@@ -324,7 +324,7 @@ class PortfolioScheduler:
                 
                 # 检查参数有效性
                 if not all([entry_min, entry_max, take_profit, stop_loss]):
-                    print(f"[WARN] {code} 参数不完整，跳过同步")
+                    logger.warning(f"[WARN] {code} 参数不完整，跳过同步")
                     failed_count += 1
                     continue
                 
@@ -348,11 +348,11 @@ class PortfolioScheduler:
                 result = monitor_db.batch_add_or_update_monitors(monitors_data)
                 return result
             else:
-                print("[WARN] 没有需要同步的监测数据")
+                logger.warning("[WARN] 没有需要同步的监测数据")
                 return {"added": 0, "updated": 0, "failed": 0, "total": 0}
             
         except Exception as e:
-            print(f"[ERROR] 监测同步异常: {str(e)}")
+            logger.error(f"[ERROR] 监测同步异常: {str(e)}")
             import traceback
             traceback.print_exc()
             return {"added": 0, "updated": 0, "failed": 0, "total": 0}
@@ -374,12 +374,12 @@ class PortfolioScheduler:
             )
             
             if success:
-                print("[OK] 持仓分析通知发送成功")
+                logger.info("[OK] 持仓分析通知发送成功")
             else:
-                print("[WARN] 持仓分析通知发送失败（可能未配置通知服务）")
+                logger.error("[WARN] 持仓分析通知发送失败（可能未配置通知服务）")
             
         except Exception as e:
-            print(f"[ERROR] 发送通知失败: {str(e)}")
+            logger.error(f"[ERROR] 发送通知失败: {str(e)}")
             import traceback
             traceback.print_exc()
     
@@ -404,7 +404,7 @@ class PortfolioScheduler:
                 self.notification_service.send_webhook("【持仓定时分析】执行失败", content)
                 
         except Exception as e:
-            print(f"[ERROR] 发送错误通知失败: {str(e)}")
+            logger.error(f"[ERROR] 发送错误通知失败: {str(e)}")
     
     def _generate_notification_content(self, analysis_results: dict, 
                                       sync_result: Optional[dict]) -> str:
@@ -501,7 +501,7 @@ class PortfolioScheduler:
             job = schedule.every().day.at(time_str).do(self._scheduled_job)
             job.tag('portfolio_analysis')
         self._update_next_run_time()
-        print(f"[OK] 重新调度任务: 每天 {', '.join(self.schedule_times)}")
+        logger.info(f"[OK] 重新调度任务: 每天 {', '.join(self.schedule_times)}")
     
     def _update_next_run_time(self):
         """更新下次运行时间"""
@@ -513,14 +513,14 @@ class PortfolioScheduler:
     
     def _run_schedule_loop(self):
         """调度循环（在后台线程中运行）"""
-        print("[OK] 定时调度器线程启动")
+        logger.info("[OK] 定时调度器线程启动")
         
         while self._is_running:
             schedule.run_pending()
             self._update_next_run_time()
             time.sleep(1)
         
-        print("[OK] 定时调度器线程停止")
+        logger.info("[OK] 定时调度器线程停止")
     
     def start(self) -> bool:
         """
@@ -530,18 +530,18 @@ class PortfolioScheduler:
             是否启动成功
         """
         if self._is_running:
-            print("[WARN] 定时任务已在运行中")
+            logger.warning("[WARN] 定时任务已在运行中")
             return False
         
         # 检查持仓数量
         stock_count = portfolio_manager.get_stock_count()
         if stock_count == 0:
-            print("[ERROR] 没有持仓股票，无法启动定时任务")
+            logger.error("[ERROR] 没有持仓股票，无法启动定时任务")
             return False
         
         # 检查时间配置
         if not self.schedule_times:
-            print("[ERROR] 没有配置定时时间")
+            logger.error("[ERROR] 没有配置定时时间")
             return False
         
         # 调度任务（为每个时间点创建任务）
@@ -549,12 +549,12 @@ class PortfolioScheduler:
         jobs_to_remove = [job for job in schedule.jobs if 'portfolio_analysis' in job.tags]
         for job in jobs_to_remove:
             schedule.cancel_job(job)
-        print(f"[OK] 清除了 {len(jobs_to_remove)} 个旧的持仓任务")
+        logger.info(f"[OK] 清除了 {len(jobs_to_remove)} 个旧的持仓任务")
         
         for time_str in self.schedule_times:
             job = schedule.every().day.at(time_str).do(self._scheduled_job)
             job.tag('portfolio_analysis')
-            print(f"[OK] 添加调度任务: 每天 {time_str}")
+            logger.info(f"[OK] 添加调度任务: 每天 {time_str}")
         
         self._update_next_run_time()
         
@@ -563,12 +563,12 @@ class PortfolioScheduler:
         self.thread = threading.Thread(target=self._run_schedule_loop, daemon=True)
         self.thread.start()
         
-        print(f"\n[OK] 定时任务已启动")
-        print(f"    调度时间: {', '.join(self.schedule_times)}")
-        print(f"    分析模式: {self.analysis_mode}")
-        print(f"    持仓数量: {stock_count}只")
+        logger.info(f"\n[OK] 定时任务已启动")
+        logger.info(f"    调度时间: {', '.join(self.schedule_times)}")
+        logger.info(f"    分析模式: {self.analysis_mode}")
+        logger.info(f"    持仓数量: {stock_count}只")
         if self.next_run_time:
-            print(f"    下次运行: {self.next_run_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"    下次运行: {self.next_run_time.strftime('%Y-%m-%d %H:%M:%S')}")
         
         return True
     
@@ -580,7 +580,7 @@ class PortfolioScheduler:
             是否停止成功
         """
         if not self._is_running:
-            print("[WARN] 定时任务未运行")
+            logger.warning("[WARN] 定时任务未运行")
             return False
         
         self._is_running = False
@@ -590,9 +590,9 @@ class PortfolioScheduler:
             jobs_to_remove = [job for job in schedule.jobs if 'portfolio_analysis' in job.tags]
             for job in jobs_to_remove:
                 schedule.cancel_job(job)
-            print(f"[OK] 清除了 {len(jobs_to_remove)} 个持仓任务")
+            logger.info(f"[OK] 清除了 {len(jobs_to_remove)} 个持仓任务")
         except Exception as e:
-            print(f"[WARN] 清除任务时出错: {e}")
+            logger.error(f"[WARN] 清除任务时出错: {e}")
         
         # 等待线程结束（最多等待2秒）
         if self.thread and self.thread.is_alive():
@@ -601,7 +601,7 @@ class PortfolioScheduler:
         self.thread = None
         self.next_run_time = None
         
-        print("[OK] 定时任务已停止")
+        logger.info("[OK] 定时任务已停止")
         return True
     
     def run_once(self) -> bool:
@@ -614,10 +614,10 @@ class PortfolioScheduler:
         # 检查持仓数量
         stock_count = portfolio_manager.get_stock_count()
         if stock_count == 0:
-            print("[ERROR] 没有持仓股票")
+            logger.error("[ERROR] 没有持仓股票")
             return False
         
-        print("[OK] 立即执行持仓分析...")
+        logger.info("[OK] 立即执行持仓分析...")
         self._scheduled_job()
         return True
     
@@ -671,7 +671,7 @@ class PortfolioScheduler:
         
         if max_workers is not None:
             self.max_workers = max_workers
-            print(f"[OK] 设置并行线程数: {max_workers}")
+            logger.info(f"[OK] 设置并行线程数: {max_workers}")
         
         if auto_sync_monitor is not None:
             self.set_auto_monitor_sync(auto_sync_monitor)
@@ -679,7 +679,7 @@ class PortfolioScheduler:
         if send_notification is not None:
             self.set_notification_enabled(send_notification)
         
-        print("[OK] 配置已更新")
+        logger.info("[OK] 配置已更新")
     
     def start_scheduler(self) -> bool:
         """
@@ -715,9 +715,9 @@ portfolio_scheduler = PortfolioScheduler()
 
 if __name__ == "__main__":
     # 测试代码
-    print("="*60)
-    print("持仓定时调度器测试")
-    print("="*60)
+    logger.info("="*60)
+    logger.info("持仓定时调度器测试")
+    logger.info("="*60)
     
     scheduler = PortfolioScheduler()
     
@@ -729,9 +729,9 @@ if __name__ == "__main__":
     
     # 获取状态
     status = scheduler.get_status()
-    print("\n调度器状态:")
+    logger.info("\n调度器状态:")
     for key, value in status.items():
-        print(f"  {key}: {value}")
+        logger.info(f"  {key}: {value}")
     
-    print("\n[OK] 调度器测试完成")
+    logger.info("\n[OK] 调度器测试完成")
 

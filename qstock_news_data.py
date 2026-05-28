@@ -40,7 +40,7 @@ class QStockNewsDataFetcher:
     def __init__(self):
         self.max_items = 30  # 最多获取的新闻数量
         self.available = True
-        print("✓ 新闻数据获取器初始化成功（akshare数据源）")
+        logger.info("✓ 新闻数据获取器初始化成功（akshare数据源）")
     
     def get_stock_news(self, symbol):
         """
@@ -70,19 +70,19 @@ class QStockNewsDataFetcher:
         
         try:
             # 获取新闻数据
-            print(f"📰 正在使用qstock获取 {symbol} 的最新新闻...")
+            logger.info(f"📰 正在使用qstock获取 {symbol} 的最新新闻...")
             news_data = self._get_news_data(symbol)
             
             if news_data:
                 data["news_data"] = news_data
-                print(f"   ✓ 成功获取 {len(news_data.get('items', []))} 条新闻")
+                logger.info(f"   ✓ 成功获取 {len(news_data.get('items', []))} 条新闻")
                 data["data_success"] = True
-                print("✅ 新闻数据获取完成")
+                logger.info("✅ 新闻数据获取完成")
             else:
-                print("⚠️ 未能获取到新闻数据")
+                logger.warning("⚠️ 未能获取到新闻数据")
                 
         except Exception as e:
-            print(f"❌ 获取新闻数据失败: {e}")
+            logger.error(f"❌ 获取新闻数据失败: {e}")
             data["error"] = str(e)
         
         return data
@@ -94,7 +94,7 @@ class QStockNewsDataFetcher:
     def _get_news_data(self, symbol):
         """获取新闻数据（使用akshare）"""
         try:
-            print(f"   使用 akshare 获取新闻...")
+            logger.info(f"   使用 akshare 获取新闻...")
             
             news_items = []
             
@@ -104,7 +104,7 @@ class QStockNewsDataFetcher:
                 df = ak.stock_news_em(symbol=symbol)
                 
                 if df is not None and not df.empty:
-                    print(f"   ✓ 从东方财富获取到 {len(df)} 条新闻")
+                    logger.info(f"   ✓ 从东方财富获取到 {len(df)} 条新闻")
                     
                     # 处理DataFrame，提取新闻
                     for idx, row in df.head(self.max_items).iterrows():
@@ -128,7 +128,7 @@ class QStockNewsDataFetcher:
                             news_items.append(item)
             
             except Exception as e:
-                print(f"   ⚠ 从东方财富获取失败: {e}")
+                logger.error(f"   ⚠ 从东方财富获取失败: {e}")
             
             # 方法2: 如果没有获取到，尝试获取新浪财经新闻
             if not news_items:
@@ -142,7 +142,7 @@ class QStockNewsDataFetcher:
                         match = df_info[df_info['代码'] == symbol]
                         if not match.empty:
                             stock_name = match.iloc[0]['名称']
-                            print(f"   找到股票名称: {stock_name}")
+                            logger.info(f"   找到股票名称: {stock_name}")
                     
                     # 使用股票名称搜索新闻
                     if stock_name:
@@ -150,7 +150,7 @@ class QStockNewsDataFetcher:
                         try:
                             df = ak.stock_news_sina(symbol=stock_name)
                             if df is not None and not df.empty:
-                                print(f"   ✓ 从新浪财经获取到 {len(df)} 条新闻")
+                                logger.info(f"   ✓ 从新浪财经获取到 {len(df)} 条新闻")
                                 
                                 for idx, row in df.head(self.max_items).iterrows():
                                     item = {'source': '新浪财经'}
@@ -170,7 +170,7 @@ class QStockNewsDataFetcher:
                             pass
                 
                 except Exception as e:
-                    print(f"   ⚠ 从新浪财经获取失败: {e}")
+                    logger.error(f"   ⚠ 从新浪财经获取失败: {e}")
             
             # 方法3: 尝试获取财联社电报
             if not news_items or len(news_items) < 5:
@@ -191,7 +191,7 @@ class QStockNewsDataFetcher:
                         ]
                         
                         if not df_filtered.empty:
-                            print(f"   ✓ 从财联社获取到 {len(df_filtered)} 条相关新闻")
+                            logger.info(f"   ✓ 从财联社获取到 {len(df_filtered)} 条相关新闻")
                             
                             for idx, row in df_filtered.head(self.max_items - len(news_items)).iterrows():
                                 item = {'source': '财联社'}
@@ -209,10 +209,10 @@ class QStockNewsDataFetcher:
                                     news_items.append(item)
                 
                 except Exception as e:
-                    print(f"   ⚠ 从财联社获取失败: {e}")
+                    logger.error(f"   ⚠ 从财联社获取失败: {e}")
             
             if not news_items:
-                print(f"   未找到股票 {symbol} 的新闻")
+                logger.info(f"   未找到股票 {symbol} 的新闻")
                 return None
             
             # 限制数量
@@ -226,7 +226,7 @@ class QStockNewsDataFetcher:
             }
             
         except Exception as e:
-            print(f"   获取新闻数据异常: {e}")
+            logger.error(f"   获取新闻数据异常: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -281,34 +281,34 @@ class QStockNewsDataFetcher:
 
 # 测试函数
 if __name__ == "__main__":
-    print("测试新闻数据获取（akshare数据源）...")
-    print("="*60)
+    logger.info("测试新闻数据获取（akshare数据源）...")
+    logger.info("="*60)
     
     fetcher = QStockNewsDataFetcher()
     
     if not fetcher.available:
-        print("❌ 新闻数据获取器不可用")
+        logger.error("❌ 新闻数据获取器不可用")
         sys.exit(1)
     
     # 测试股票
     test_symbols = ["000001", "600519"]  # 平安银行、贵州茅台
     
     for symbol in test_symbols:
-        print(f"\n{'='*60}")
-        print(f"正在测试股票: {symbol}")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"正在测试股票: {symbol}")
+        logger.info(f"{'='*60}\n")
         
         data = fetcher.get_stock_news(symbol)
         
         if data.get("data_success"):
-            print("\n" + "="*60)
-            print("新闻数据获取成功！")
-            print("="*60)
+            logger.info("\n" + "="*60)
+            logger.info("新闻数据获取成功！")
+            logger.info("="*60)
             
             formatted_text = fetcher.format_news_for_ai(data)
-            print(formatted_text)
+            logger.info(formatted_text)
         else:
-            print(f"\n获取失败: {data.get('error', '未知错误')}")
+            logger.error(f"\n获取失败: {data.get('error', '未知错误')}")
         
-        print("\n")
+        logger.info("\n")
 

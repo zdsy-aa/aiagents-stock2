@@ -960,13 +960,13 @@ news_flow_agents = NewsFlowAgents()
 
 # 测试代码
 if __name__ == "__main__":
-    print("=== 测试新闻流量智能分析代理 ===")
+    logger.info("=== 测试新闻流量智能分析代理 ===")
     
     # 检查AI是否可用
     if news_flow_agents.is_available():
-        print("✅ AI客户端可用")
+        logger.info("✅ AI客户端可用")
     else:
-        print("⚠️ AI客户端不可用，将使用降级方法")
+        logger.warning("⚠️ AI客户端不可用，将使用降级方法")
     
     # 模拟数据
     hot_topics = [
@@ -991,7 +991,7 @@ if __name__ == "__main__":
     }
     
     # 运行板块分析
-    print("\n--- 板块影响分析 ---")
+    logger.info("\n--- 板块影响分析 ---")
     sector_result = news_flow_agents.sector_impact_agent(hot_topics, stock_news, flow_data)
-    print(f"受益板块: {[s.get('name', '') for s in sector_result.get('benefited_sectors', [])]}")
-    print(f"是否降级: {sector_result.get('fallback', False)}")
+    logger.info(f"受益板块: {[s.get('name', '') for s in sector_result.get('benefited_sectors', [])]}")
+    logger.info(f"是否降级: {sector_result.get('fallback', False)}")

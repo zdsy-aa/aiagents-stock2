@@ -16,6 +16,8 @@ from smart_monitor_db import SmartMonitorDB
 from notification_service import notification_service  # 复用主程序的通知服务
 from config_manager import config_manager  # 复用主程序的配置管理器
 
+logger = logging.getLogger(__name__)
+
 
 class SmartMonitorEngine:
     """智能盯盘引擎"""
@@ -633,14 +635,14 @@ if __name__ == '__main__':
     )
     
     # 测试分析贵州茅台
-    print("\n测试分析贵州茅台(600519)...")
+    logger.info("\n测试分析贵州茅台(600519)...")
     result = engine.analyze_stock('600519', auto_trade=False, notify=False)
     
     if result['success']:
-        print(f"\n分析成功!")
-        print(f"  决策: {result['decision']['action']}")
-        print(f"  信心度: {result['decision']['confidence']}%")
-        print(f"  理由: {result['decision']['reasoning'][:100]}...")
+        logger.info(f"\n分析成功!")
+        logger.info(f"  决策: {result['decision']['action']}")
+        logger.info(f"  信心度: {result['decision']['confidence']}%")
+        logger.info(f"  理由: {result['decision']['reasoning'][:100]}...")
     else:
-        print(f"\n分析失败: {result.get('error')}")
+        logger.error(f"\n分析失败: {result.get('error')}")
 

@@ -6,6 +6,9 @@
 import pandas as pd
 from typing import Dict, List
 from collections import Counter
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class LonghubangScoring:
@@ -34,7 +37,7 @@ class LonghubangScoring:
             'QFII', 'RQFII', '券商', '信托'
         ]
         
-        print("[智瞰龙虎] 评分系统初始化完成")
+        logger.info("[智瞰龙虎] 评分系统初始化完成")
     
     def calculate_stock_score(self, stock_data: List[Dict]) -> float:
         """
@@ -544,9 +547,9 @@ class LonghubangScoring:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎评分系统")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎评分系统")
+    logger.info("=" * 60)
     
     # 创建测试数据
     test_data = [
@@ -577,8 +580,8 @@ if __name__ == "__main__":
     # 测试评分
     df_result = scoring.score_all_stocks(test_data)
     
-    print("\n评分结果：")
-    print(df_result)
+    logger.info("\n评分结果：")
+    logger.info(df_result)
     
-    print("\n" + scoring.get_score_explanation())
+    logger.info("\n" + scoring.get_score_explanation())
 

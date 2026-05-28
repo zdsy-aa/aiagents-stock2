@@ -10,6 +10,9 @@ import pywencai
 from datetime import datetime
 from typing import Tuple, Optional
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class LowPriceBullSelector:
@@ -39,11 +42,11 @@ class LowPriceBullSelector:
             (success, dataframe, message)
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🐂 低价擒牛选股 - 数据获取中")
-            print(f"{'='*60}")
-            print(f"策略: 股价<10元 + 净利润增长率≥100% + 沪深A股")
-            print(f"目标: 筛选前{top_n}只股票")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🐂 低价擒牛选股 - 数据获取中")
+            logger.info(f"{'='*60}")
+            logger.info(f"策略: 股价<10元 + 净利润增长率≥100% + 沪深A股")
+            logger.info(f"目标: 筛选前{top_n}只股票")
             
             # 构建查询语句（按成交额由小至大排名）
             query = (
@@ -56,8 +59,8 @@ class LowPriceBullSelector:
                 "成交额由小至大排名"
             )
             
-            print(f"\n查询语句: {query}")
-            print(f"正在调用问财接口...")
+            logger.info(f"\n查询语句: {query}")
+            logger.info(f"正在调用问财接口...")
             
             # 调用pywencai
             result = pywencai.get(query=query, loop=True)
@@ -71,14 +74,14 @@ class LowPriceBullSelector:
             if df_result is None or df_result.empty:
                 return False, None, "未获取到符合条件的股票数据"
             
-            print(f"✅ 成功获取 {len(df_result)} 只股票")
+            logger.info(f"✅ 成功获取 {len(df_result)} 只股票")
             
             # 显示获取到的列名
-            print(f"\n获取到的数据字段:")
+            logger.info(f"\n获取到的数据字段:")
             for col in df_result.columns[:15]:
-                print(f"  - {col}")
+                logger.info(f"  - {col}")
             if len(df_result.columns) > 15:
-                print(f"  ... 还有 {len(df_result.columns) - 15} 个字段")
+                logger.info(f"  ... 还有 {len(df_result.columns) - 15} 个字段")
             
             # 保存原始数据
             self.raw_data = df_result
@@ -86,30 +89,30 @@ class LowPriceBullSelector:
             # 取前N只
             if len(df_result) > top_n:
                 selected = df_result.head(top_n)
-                print(f"\n从 {len(df_result)} 只股票中选出前 {top_n} 只")
+                logger.info(f"\n从 {len(df_result)} 只股票中选出前 {top_n} 只")
             else:
                 selected = df_result
-                print(f"\n共 {len(df_result)} 只符合条件的股票")
+                logger.info(f"\n共 {len(df_result)} 只符合条件的股票")
             
             self.selected_stocks = selected
             
             # 显示选中的股票
-            print(f"\n✅ 选中的股票:")
+            logger.info(f"\n✅ 选中的股票:")
             for idx, row in selected.iterrows():
                 code = row.get('股票代码', 'N/A')
                 name = row.get('股票简称', 'N/A')
                 price = row.get('股价', row.get('最新价', 'N/A'))
                 growth = row.get('净利润增长率', row.get('净利润同比增长率', 'N/A'))
                 turnover = row.get('成交额', 'N/A')
-                print(f"  {idx+1}. {code} {name} - 股价:{price} 净利增长:{growth}% 成交额:{turnover}")
+                logger.info(f"  {idx+1}. {code} {name} - 股价:{price} 净利增长:{growth}% 成交额:{turnover}")
             
-            print(f"{'='*60}\n")
+            logger.info(f"{'='*60}\n")
             
             return True, selected, f"成功筛选出{len(selected)}只低价高成长股票"
             
         except Exception as e:
             error_msg = f"获取数据失败: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             import traceback
             traceback.print_exc()
             return False, None, error_msg
@@ -129,10 +132,10 @@ class LowPriceBullSelector:
             elif isinstance(result, list):
                 return pd.DataFrame(result)
             else:
-                print(f"⚠️ 未知的数据格式: {type(result)}")
+                logger.warning(f"⚠️ 未知的数据格式: {type(result)}")
                 return None
         except Exception as e:
-            print(f"转换DataFrame失败: {e}")
+            logger.error(f"转换DataFrame失败: {e}")
             return None
     
     def get_stock_codes(self) -> list:

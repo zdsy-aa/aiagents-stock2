@@ -19,6 +19,9 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 import tempfile
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 def register_chinese_fonts():
     """注册中文字体 - 支持Windows和Linux系统"""
@@ -52,18 +55,18 @@ def register_chinese_fonts():
             if os.path.exists(font_path):
                 try:
                     pdfmetrics.registerFont(TTFont('ChineseFont', font_path))
-                    print(f"✅ 成功注册中文字体: {font_path}")
+                    logger.info(f"✅ 成功注册中文字体: {font_path}")
                     return 'ChineseFont'
                 except Exception as e:
-                    print(f"⚠️ 尝试注册字体 {font_path} 失败: {e}")
+                    logger.error(f"⚠️ 尝试注册字体 {font_path} 失败: {e}")
                     continue
         
         # 如果没有找到中文字体，打印警告并使用默认字体
-        print("⚠️ 警告：未找到中文字体，PDF中文可能显示为方框")
-        print("建议：在Docker中安装中文字体包")
+        logger.warning("⚠️ 警告：未找到中文字体，PDF中文可能显示为方框")
+        logger.info("建议：在Docker中安装中文字体包")
         return 'Helvetica'
     except Exception as e:
-        print(f"❌ 注册中文字体时出错: {e}")
+        logger.error(f"❌ 注册中文字体时出错: {e}")
         return 'Helvetica'
 
 def create_pdf_report(stock_info, agents_results, discussion_result, final_decision):

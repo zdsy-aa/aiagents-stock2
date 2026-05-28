@@ -11,6 +11,8 @@ import pandas as pd
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 
+logger = logging.getLogger(__name__)
+
 
 class SmartMonitorDataFetcher:
     """A股数据获取器（支持多数据源降级：TDX -> AKShare -> Tushare）"""
@@ -804,22 +806,22 @@ if __name__ == '__main__':
     fetcher = SmartMonitorDataFetcher()
     
     # 测试贵州茅台
-    print("测试获取贵州茅台(600519)数据...")
+    logger.info("测试获取贵州茅台(600519)数据...")
     data = fetcher.get_comprehensive_data('600519')
     
     if data:
-        print("\n实时行情:")
-        print(f"  当前价: {data.get('current_price')} 元")
-        print(f"  涨跌幅: {data.get('change_pct')}%")
+        logger.info("\n实时行情:")
+        logger.info(f"  当前价: {data.get('current_price')} 元")
+        logger.info(f"  涨跌幅: {data.get('change_pct')}%")
         
-        print("\n技术指标:")
-        print(f"  MA5: {data.get('ma5', 0):.2f}")
-        print(f"  MA20: {data.get('ma20', 0):.2f}")
-        print(f"  MACD: {data.get('macd', 0):.4f}")
-        print(f"  RSI(6): {data.get('rsi6', 0):.2f}")
+        logger.info("\n技术指标:")
+        logger.info(f"  MA5: {data.get('ma5', 0):.2f}")
+        logger.info(f"  MA20: {data.get('ma20', 0):.2f}")
+        logger.info(f"  MACD: {data.get('macd', 0):.4f}")
+        logger.info(f"  RSI(6): {data.get('rsi6', 0):.2f}")
         
         if 'main_force' in data:
-            print("\n主力资金:")
-            print(f"  主力净额: {data['main_force']['main_net']:.2f}万")
-            print(f"  主力动向: {data['main_force']['trend']}")
+            logger.info("\n主力资金:")
+            logger.info(f"  主力净额: {data['main_force']['main_net']:.2f}万")
+            logger.info(f"  主力动向: {data['main_force']['trend']}")
 

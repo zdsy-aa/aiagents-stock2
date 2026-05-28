@@ -13,6 +13,8 @@ import os
 from dotenv import load_dotenv
 from sector_strategy_db import SectorStrategyDatabase
 
+logger = logging.getLogger(__name__)
+
 # 加载环境变量
 load_dotenv()
 
@@ -23,7 +25,7 @@ class SectorStrategyDataFetcher:
     """板块策略数据获取类"""
     
     def __init__(self):
-        print("[智策] 板块数据获取器初始化...")
+        logger.info("[智策] 板块数据获取器初始化...")
         self.max_retries = 3  # 最大重试次数
         self.retry_delay = 2  # 重试延迟（秒）
         self.request_delay = 1  # 请求间隔（秒）
@@ -50,10 +52,10 @@ class SectorStrategyDataFetcher:
                 return result
             except Exception as e:
                 if attempt < self.max_retries - 1:
-                    print(f"    请求失败，{self.retry_delay}秒后重试... (尝试 {attempt + 1}/{self.max_retries})")
+                    logger.error(f"    请求失败，{self.retry_delay}秒后重试... (尝试 {attempt + 1}/{self.max_retries})")
                     time.sleep(self.retry_delay)
                 else:
-                    print(f"    请求失败，已达最大重试次数: {e}")
+                    logger.error(f"    请求失败，已达最大重试次数: {e}")
                     raise e
     
     def get_all_sector_data(self):
@@ -63,7 +65,7 @@ class SectorStrategyDataFetcher:
         Returns:
             dict: 包含多个维度的板块数据
         """
-        print("[智策] 开始获取板块综合数据...")
+        logger.info("[智策] 开始获取板块综合数据...")
         
         data = {
             "success": False,
@@ -77,55 +79,55 @@ class SectorStrategyDataFetcher:
         
         try:
             # 1. 获取行业板块数据
-            print("  [1/6] 获取行业板块行情...")
+            logger.info("  [1/6] 获取行业板块行情...")
             sectors_data = self._get_sector_performance()
             if sectors_data:
                 data["sectors"] = sectors_data
-                print(f"    ✓ 成功获取 {len(sectors_data)} 个行业板块数据")
+                logger.info(f"    ✓ 成功获取 {len(sectors_data)} 个行业板块数据")
             
             # 2. 获取概念板块数据
-            print("  [2/6] 获取概念板块行情...")
+            logger.info("  [2/6] 获取概念板块行情...")
             concept_data = self._get_concept_performance()
             if concept_data:
                 data["concepts"] = concept_data
-                print(f"    ✓ 成功获取 {len(concept_data)} 个概念板块数据")
+                logger.info(f"    ✓ 成功获取 {len(concept_data)} 个概念板块数据")
             
             # 3. 获取板块资金流向
-            print("  [3/6] 获取行业资金流向...")
+            logger.info("  [3/6] 获取行业资金流向...")
             fund_flow_data = self._get_sector_fund_flow()
             if fund_flow_data:
                 data["sector_fund_flow"] = fund_flow_data
-                print(f"    ✓ 成功获取资金流向数据")
+                logger.info(f"    ✓ 成功获取资金流向数据")
             
             # 4. 获取市场总体情况
-            print("  [4/6] 获取市场总体情况...")
+            logger.info("  [4/6] 获取市场总体情况...")
             market_data = self._get_market_overview()
             if market_data:
                 data["market_overview"] = market_data
-                print(f"    ✓ 成功获取市场概况")
+                logger.info(f"    ✓ 成功获取市场概况")
             
             # 5. 获取北向资金流向
-            print("  [5/6] 获取北向资金流向...")
+            logger.info("  [5/6] 获取北向资金流向...")
             north_flow = self._get_north_money_flow()
             if north_flow:
                 data["north_flow"] = north_flow
-                print(f"    ✓ 成功获取北向资金数据")
+                logger.info(f"    ✓ 成功获取北向资金数据")
             
             # 6. 获取财经新闻
-            print("  [6/6] 获取财经新闻...")
+            logger.info("  [6/6] 获取财经新闻...")
             news_data = self._get_financial_news()
             if news_data:
                 data["news"] = news_data
-                print(f"    ✓ 成功获取 {len(news_data)} 条新闻")
+                logger.info(f"    ✓ 成功获取 {len(news_data)} 条新闻")
             
             data["success"] = True
-            print("[智策] ✓ 板块数据获取完成！")
+            logger.info("[智策] ✓ 板块数据获取完成！")
             
             # 保存原始数据到数据库
             self._save_raw_data_to_db(data)
             
         except Exception as e:
-            print(f"[智策] ✗ 数据获取出错: {e}")
+            logger.error(f"[智策] ✗ 数据获取出错: {e}")
             data["error"] = str(e)
         
         return data
@@ -158,7 +160,7 @@ class SectorStrategyDataFetcher:
             return sectors
             
         except Exception as e:
-            print(f"    获取行业板块数据失败: {e}")
+            logger.error(f"    获取行业板块数据失败: {e}")
             return {}
     
     def _get_concept_performance(self):
@@ -189,7 +191,7 @@ class SectorStrategyDataFetcher:
             return concepts
             
         except Exception as e:
-            print(f"    获取概念板块数据失败: {e}")
+            logger.error(f"    获取概念板块数据失败: {e}")
             return {}
     
     def _get_sector_fund_flow(self):
@@ -222,7 +224,7 @@ class SectorStrategyDataFetcher:
             return fund_flow
             
         except Exception as e:
-            print(f"    获取行业资金流向失败: {e}")
+            logger.error(f"    获取行业资金流向失败: {e}")
             return {}
     
     def _get_market_overview(self):
@@ -294,7 +296,7 @@ class SectorStrategyDataFetcher:
             return overview
             
         except Exception as e:
-            print(f"    获取市场概况失败: {e}")
+            logger.error(f"    获取市场概况失败: {e}")
             return {}
     
     def _get_north_money_flow(self):
@@ -311,18 +313,18 @@ class SectorStrategyDataFetcher:
                         import tushare as ts
                         ts.set_token(tushare_token)
                         self.ts_pro = ts.pro_api()
-                        print("    [Tushare] ✅ 初始化成功")
+                        logger.info("    [Tushare] ✅ 初始化成功")
                     except Exception as e:
-                        print(f"    [Tushare] 初始化失败: {e}")
+                        logger.error(f"    [Tushare] 初始化失败: {e}")
                         self._tushare_api = None
                 else:
-                    print("    [Tushare] 未配置Token")
+                    logger.info("    [Tushare] 未配置Token")
                     self._tushare_api = None
             
             
             # 如果Tushare可用，获取数据
             if hasattr(self, '_tushare_api') and self._tushare_api:
-                print("    [Tushare] 正在获取沪深港通资金流向...")
+                logger.info("    [Tushare] 正在获取沪深港通资金流向...")
                 
                 # 获取最近30天的数据
                 end_date = datetime.now()
@@ -334,7 +336,7 @@ class SectorStrategyDataFetcher:
                 )
                 
                 if df is not None and not df.empty:
-                    print("    [Tushare] ✅ 成功获取数据")
+                    logger.info("    [Tushare] ✅ 成功获取数据")
                     
                     # 按日期降序排列，获取最新数据
                     df = df.sort_values('trade_date', ascending=False)
@@ -360,19 +362,19 @@ class SectorStrategyDataFetcher:
                     
                     return north_flow
                 else:
-                    print("    [Tushare] ❌ 未获取到数据")
+                    logger.error("    [Tushare] ❌ 未获取到数据")
             else:
-                print("    [Tushare] 不可用")
+                logger.info("    [Tushare] 不可用")
         except Exception as e:
-            print(f"    [Tushare] 获取北向资金失败: {e}")
+            logger.error(f"    [Tushare] 获取北向资金失败: {e}")
         
         # Tushare失败，尝试使用Akshare
         try:
-            print("    [Akshare] 正在获取沪深港通资金流向（备用数据源）...")
+            logger.info("    [Akshare] 正在获取沪深港通资金流向（备用数据源）...")
             df = self._safe_request(ak.stock_hsgt_fund_flow_summary_em)
             
             if df is not None and not df.empty:
-                print("    [Akshare] ✅ 成功获取数据")
+                logger.info("    [Akshare] ✅ 成功获取数据")
                 
                 # 获取最新数据
                 latest = df.iloc[0]
@@ -396,12 +398,12 @@ class SectorStrategyDataFetcher:
                 
                 return north_flow
             else:
-                print("    [Akshare] ❌ 未获取到数据")
+                logger.error("    [Akshare] ❌ 未获取到数据")
         except Exception as e:
-            print(f"    [Akshare] 获取北向资金失败: {e}")
+            logger.error(f"    [Akshare] 获取北向资金失败: {e}")
         
         # 所有数据源都失败
-        print("    ❌ 所有数据源均获取失败")
+        logger.error("    ❌ 所有数据源均获取失败")
         return {}
     
     def _get_financial_news(self):
@@ -429,7 +431,7 @@ class SectorStrategyDataFetcher:
                         })
                     return news_list
             except Exception as e:
-                print(f"    财联社财经新闻获取失败，尝试备源: {e}")
+                logger.error(f"    财联社财经新闻获取失败，尝试备源: {e}")
 
         # 备源：东财全球财经快讯（列：标题/摘要/发布时间/链接）
         if hasattr(ak, 'stock_info_global_em'):
@@ -447,7 +449,7 @@ class SectorStrategyDataFetcher:
                         })
                     return news_list
             except Exception as e:
-                print(f"    获取财经新闻失败: {e}")
+                logger.error(f"    获取财经新闻失败: {e}")
 
         return []
     
@@ -666,23 +668,23 @@ class SectorStrategyDataFetcher:
         """获取缓存数据，支持回退机制"""
         try:
             # 首先尝试获取最新数据
-            print("[智策] 尝试获取最新数据...")
+            logger.info("[智策] 尝试获取最新数据...")
             fresh_data = self.get_all_sector_data()
             
             if fresh_data.get("success"):
                 return fresh_data
             
             # 如果获取失败，回退到缓存数据
-            print("[智策] 获取最新数据失败，尝试加载缓存数据...")
+            logger.error("[智策] 获取最新数据失败，尝试加载缓存数据...")
             cached_data = self._load_cached_data()
             
             if cached_data:
-                print("[智策] ✓ 成功加载缓存数据")
+                logger.info("[智策] ✓ 成功加载缓存数据")
                 cached_data["from_cache"] = True
                 cached_data["cache_warning"] = "当前显示为缓存数据（24小时内），可能不是最新信息"
                 return cached_data
             else:
-                print("[智策] ✗ 无可用缓存数据")
+                logger.info("[智策] ✗ 无可用缓存数据")
                 return {
                     "success": False,
                     "error": "无法获取数据且无可用缓存",
@@ -762,21 +764,21 @@ class SectorStrategyDataFetcher:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智策板块数据采集模块")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试智策板块数据采集模块")
+    logger.info("=" * 60)
     
     fetcher = SectorStrategyDataFetcher()
     data = fetcher.get_all_sector_data()
     
     if data.get("success"):
-        print("\n" + "=" * 60)
-        print("数据采集成功！")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("数据采集成功！")
+        logger.info("=" * 60)
         
         formatted_text = fetcher.format_data_for_ai(data)
-        print(formatted_text[:3000])  # 显示前3000字符
-        print(f"\n... (总长度: {len(formatted_text)} 字符)")
+        logger.info(formatted_text[:3000])  # 显示前3000字符
+        logger.info(f"\n... (总长度: {len(formatted_text)} 字符)")
     else:
-        print(f"\n数据采集失败: {data.get('error', '未知错误')}")
+        logger.error(f"\n数据采集失败: {data.get('error', '未知错误')}")
 

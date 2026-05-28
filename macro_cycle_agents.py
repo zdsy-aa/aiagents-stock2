@@ -7,6 +7,9 @@ from deepseek_client import DeepSeekClient
 from typing import Dict, Any
 import time
 import config
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MacroCycleAgents:
@@ -15,7 +18,7 @@ class MacroCycleAgents:
     def __init__(self, model=None):
         self.model = model or config.DEFAULT_MODEL_NAME
         self.deepseek_client = DeepSeekClient(model=self.model)
-        print(f"[宏观周期] AI智能体系统初始化 (模型: {self.model})")
+        logger.info(f"[宏观周期] AI智能体系统初始化 (模型: {self.model})")
 
     def kondratieff_wave_agent(self, macro_data_text: str) -> Dict[str, Any]:
         """
@@ -27,7 +30,7 @@ class MacroCycleAgents:
         - 分析大宗商品与康波的关系
         - 给出战略性资产配置方向
         """
-        print("🌊 康波周期分析师正在分析...")
+        logger.info("🌊 康波周期分析师正在分析...")
         time.sleep(1)
 
         prompt = f"""
@@ -105,7 +108,7 @@ class MacroCycleAgents:
         ]
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=6000)
-        print("  ✓ 康波周期分析师分析完成")
+        logger.info("  ✓ 康波周期分析师分析完成")
 
         return {
             "agent_name": "康波周期分析师",
@@ -125,7 +128,7 @@ class MacroCycleAgents:
         - 结合中国特色（政策第三维度）
         - 给出中短期资产配置建议
         """
-        print("⏰ 美林时钟分析师正在分析...")
+        logger.info("⏰ 美林时钟分析师正在分析...")
         time.sleep(1)
 
         prompt = f"""
@@ -218,7 +221,7 @@ class MacroCycleAgents:
         ]
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=6000)
-        print("  ✓ 美林时钟分析师分析完成")
+        logger.info("  ✓ 美林时钟分析师分析完成")
 
         return {
             "agent_name": "美林时钟分析师",
@@ -238,7 +241,7 @@ class MacroCycleAgents:
         - 评估政策对周期的影响
         - 识别政策驱动的投资机会
         """
-        print("🏛️ 中国政策分析师正在分析...")
+        logger.info("🏛️ 中国政策分析师正在分析...")
         time.sleep(1)
 
         prompt = f"""
@@ -321,7 +324,7 @@ class MacroCycleAgents:
         ]
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=5000)
-        print("  ✓ 中国政策分析师分析完成")
+        logger.info("  ✓ 中国政策分析师分析完成")
 
         return {
             "agent_name": "中国政策分析师",
@@ -341,7 +344,7 @@ class MacroCycleAgents:
         - 构建"周期仪表盘"
         - 给出最终的综合建议
         """
-        print("👔 首席宏观策略师正在综合研判...")
+        logger.info("👔 首席宏观策略师正在综合研判...")
         time.sleep(1)
 
         prompt = f"""
@@ -436,7 +439,7 @@ class MacroCycleAgents:
         ]
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=6000)
-        print("  ✓ 首席宏观策略师综合研判完成")
+        logger.info("  ✓ 首席宏观策略师综合研判完成")
 
         return {
             "agent_name": "首席宏观策略师",
@@ -450,9 +453,9 @@ class MacroCycleAgents:
 
 # 测试
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试宏观周期AI智能体系统")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试宏观周期AI智能体系统")
+    logger.info("=" * 60)
     agents = MacroCycleAgents()
-    print(f"模型: {agents.model}")
-    print("初始化完成")
+    logger.info(f"模型: {agents.model}")
+    logger.info("初始化完成")

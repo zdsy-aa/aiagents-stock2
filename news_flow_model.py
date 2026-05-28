@@ -526,7 +526,7 @@ news_flow_model = NewsFlowModel()
 
 # 测试代码
 if __name__ == "__main__":
-    print("=== 测试新闻流量模型 ===")
+    logger.info("=== 测试新闻流量模型 ===")
     
     # 模拟数据
     platforms_data = [
@@ -549,9 +549,9 @@ if __name__ == "__main__":
     # 运行完整分析
     result = news_flow_model.run_full_model(platforms_data, hot_topics, history_scores)
     
-    print(f"\n流量分数: {result['traffic']['normalized_score']}")
-    print(f"转化率: {result['conversion']['conversion_rate']:.4%}")
-    print(f"接盘潜力: {result['potential']['potential_volume']:.1f}亿元 ({result['potential']['potential_level']})")
-    print(f"流量类型: {result['flow_type']['flow_type']}")
-    print(f"K值: {result['viral_k']['k_value']} ({result['viral_k']['trend']})")
-    print(f"\n===总结===\n{result['summary']}")
+    logger.info(f"\n流量分数: {result['traffic']['normalized_score']}")
+    logger.info(f"转化率: {result['conversion']['conversion_rate']:.4%}")
+    logger.info(f"接盘潜力: {result['potential']['potential_volume']:.1f}亿元 ({result['potential']['potential_level']})")
+    logger.info(f"流量类型: {result['flow_type']['flow_type']}")
+    logger.info(f"K值: {result['viral_k']['k_value']} ({result['viral_k']['trend']})")
+    logger.info(f"\n===总结===\n{result['summary']}")

@@ -9,6 +9,9 @@ import sys
 import io
 import warnings
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings('ignore')
 
@@ -61,28 +64,28 @@ class NewsAnnouncementDataFetcher:
         
         try:
             # 获取新闻数据
-            print("📰 正在获取最新新闻数据...")
+            logger.info("📰 正在获取最新新闻数据...")
             news_data = self._get_news_data(symbol)
             if news_data:
                 data["news_data"] = news_data
-                print(f"   ✓ 成功获取 {len(news_data.get('items', []))} 条新闻")
+                logger.info(f"   ✓ 成功获取 {len(news_data.get('items', []))} 条新闻")
             
             # 获取公告数据
-            print("📢 正在获取最新公告数据...")
+            logger.info("📢 正在获取最新公告数据...")
             announcement_data = self._get_announcement_data(symbol)
             if announcement_data:
                 data["announcement_data"] = announcement_data
-                print(f"   ✓ 成功获取 {len(announcement_data.get('items', []))} 条公告")
+                logger.info(f"   ✓ 成功获取 {len(announcement_data.get('items', []))} 条公告")
             
             # 如果至少有一个成功，则标记为成功
             if news_data or announcement_data:
                 data["data_success"] = True
-                print("✅ 新闻公告数据获取完成")
+                logger.info("✅ 新闻公告数据获取完成")
             else:
-                print("⚠️ 未能获取到新闻公告数据")
+                logger.warning("⚠️ 未能获取到新闻公告数据")
                 
         except Exception as e:
-            print(f"❌ 获取新闻公告数据失败: {e}")
+            logger.error(f"❌ 获取新闻公告数据失败: {e}")
             data["error"] = str(e)
         
         return data
@@ -97,13 +100,13 @@ class NewsAnnouncementDataFetcher:
             # 构建问句
             query = f"{symbol}新闻"
             
-            print(f"   使用问财查询: {query}")
+            logger.info(f"   使用问财查询: {query}")
             
             # 使用pywencai查询
             result = pywencai.get(query=query, loop=True)
             
             if result is None:
-                print(f"   问财查询返回None")
+                logger.info(f"   问财查询返回None")
                 return None
             
             # 处理不同类型的返回结果
@@ -113,16 +116,16 @@ class NewsAnnouncementDataFetcher:
                 try:
                     df_result = pd.DataFrame([result])
                 except Exception as e:
-                    print(f"   无法转换为DataFrame: {e}")
+                    logger.error(f"   无法转换为DataFrame: {e}")
                     return None
             elif isinstance(result, pd.DataFrame):
                 df_result = result
             else:
-                print(f"   问财返回未知类型: {type(result)}")
+                logger.info(f"   问财返回未知类型: {type(result)}")
                 return None
             
             if df_result is None or df_result.empty:
-                print(f"   查询结果为空")
+                logger.warning(f"   查询结果为空")
                 return None
             
             # 检查是否是嵌套结构
@@ -133,7 +136,7 @@ class NewsAnnouncementDataFetcher:
                 elif isinstance(table_v1_data, list) and len(table_v1_data) > 0:
                     df_result = pd.DataFrame(table_v1_data)
                 else:
-                    print(f"   tableV1数据类型不支持: {type(table_v1_data)}")
+                    logger.info(f"   tableV1数据类型不支持: {type(table_v1_data)}")
                     return None
             
             if df_result is None or df_result.empty:
@@ -179,7 +182,7 @@ class NewsAnnouncementDataFetcher:
             }
             
         except Exception as e:
-            print(f"   获取新闻数据异常: {e}")
+            logger.error(f"   获取新闻数据异常: {e}")
             return None
     
     def _get_announcement_data(self, symbol):
@@ -188,13 +191,13 @@ class NewsAnnouncementDataFetcher:
             # 构建问句
             query = f"{symbol}公告"
             
-            print(f"   使用问财查询: {query}")
+            logger.info(f"   使用问财查询: {query}")
             
             # 使用pywencai查询
             result = pywencai.get(query=query, loop=True)
             
             if result is None:
-                print(f"   问财查询返回None")
+                logger.info(f"   问财查询返回None")
                 return None
             
             # 处理不同类型的返回结果
@@ -204,16 +207,16 @@ class NewsAnnouncementDataFetcher:
                 try:
                     df_result = pd.DataFrame([result])
                 except Exception as e:
-                    print(f"   无法转换为DataFrame: {e}")
+                    logger.error(f"   无法转换为DataFrame: {e}")
                     return None
             elif isinstance(result, pd.DataFrame):
                 df_result = result
             else:
-                print(f"   问财返回未知类型: {type(result)}")
+                logger.info(f"   问财返回未知类型: {type(result)}")
                 return None
             
             if df_result is None or df_result.empty:
-                print(f"   查询结果为空")
+                logger.warning(f"   查询结果为空")
                 return None
             
             # 检查是否是嵌套结构
@@ -224,7 +227,7 @@ class NewsAnnouncementDataFetcher:
                 elif isinstance(table_v1_data, list) and len(table_v1_data) > 0:
                     df_result = pd.DataFrame(table_v1_data)
                 else:
-                    print(f"   tableV1数据类型不支持: {type(table_v1_data)}")
+                    logger.info(f"   tableV1数据类型不支持: {type(table_v1_data)}")
                     return None
             
             if df_result is None or df_result.empty:
@@ -269,7 +272,7 @@ class NewsAnnouncementDataFetcher:
             }
             
         except Exception as e:
-            print(f"   获取公告数据异常: {e}")
+            logger.error(f"   获取公告数据异常: {e}")
             return None
     
     def format_news_announcements_for_ai(self, data):
@@ -324,22 +327,22 @@ class NewsAnnouncementDataFetcher:
 
 # 测试函数
 if __name__ == "__main__":
-    print("测试新闻公告数据获取...")
+    logger.info("测试新闻公告数据获取...")
     fetcher = NewsAnnouncementDataFetcher()
     
     # 测试平安银行
     symbol = "000001"
-    print(f"\n正在获取 {symbol} 的新闻公告数据...\n")
+    logger.info(f"\n正在获取 {symbol} 的新闻公告数据...\n")
     
     data = fetcher.get_news_and_announcements(symbol)
     
     if data.get("data_success"):
-        print("\n" + "="*60)
-        print("新闻公告数据获取成功！")
-        print("="*60)
+        logger.info("\n" + "="*60)
+        logger.info("新闻公告数据获取成功！")
+        logger.info("="*60)
         
         formatted_text = fetcher.format_news_announcements_for_ai(data)
-        print(formatted_text)
+        logger.info(formatted_text)
     else:
-        print(f"\n获取失败: {data.get('error', '未知错误')}")
+        logger.error(f"\n获取失败: {data.get('error', '未知错误')}")
 

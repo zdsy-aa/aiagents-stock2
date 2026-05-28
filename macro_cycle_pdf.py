@@ -15,6 +15,9 @@ from datetime import datetime
 import os
 import tempfile
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MacroCyclePDFGenerator:
@@ -40,16 +43,16 @@ class MacroCyclePDFGenerator:
                     try:
                         pdfmetrics.registerFont(TTFont('ChineseFont', font_path))
                         self.chinese_font = 'ChineseFont'
-                        print(f"[宏观PDF] 成功加载字体: {font_path}")
+                        logger.info(f"[宏观PDF] 成功加载字体: {font_path}")
                         return
                     except Exception:
                         continue
 
             self.chinese_font = 'Helvetica'
-            print("[宏观PDF] 警告: 未找到中文字体，使用默认字体")
+            logger.warning("[宏观PDF] 警告: 未找到中文字体，使用默认字体")
 
         except Exception as e:
-            print(f"[宏观PDF] 字体设置失败: {e}")
+            logger.error(f"[宏观PDF] 字体设置失败: {e}")
             self.chinese_font = 'Helvetica'
 
     def generate_pdf(self, result_data: dict, output_path: str = None) -> str:
@@ -105,11 +108,11 @@ class MacroCyclePDFGenerator:
             # 生成PDF
             doc.build(story)
 
-            print(f"[宏观PDF] 报告生成成功: {output_path}")
+            logger.info(f"[宏观PDF] 报告生成成功: {output_path}")
             return output_path
 
         except Exception as e:
-            print(f"[宏观PDF] 生成失败: {e}")
+            logger.error(f"[宏观PDF] 生成失败: {e}")
             import traceback
             traceback.print_exc()
             raise
@@ -407,9 +410,9 @@ def generate_macro_cycle_markdown(result_data: dict) -> str:
 
 # 测试
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试宏观周期PDF生成器")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试宏观周期PDF生成器")
+    logger.info("=" * 60)
 
     test_data = {
         "success": True,
@@ -424,4 +427,4 @@ if __name__ == "__main__":
 
     generator = MacroCyclePDFGenerator()
     output_path = generator.generate_pdf(test_data)
-    print(f"测试PDF生成: {output_path}")
+    logger.info(f"测试PDF生成: {output_path}")

@@ -524,7 +524,7 @@ sentiment_analyzer = SentimentAnalyzer()
 
 # 测试代码
 if __name__ == "__main__":
-    print("=== 测试情绪分析模块 ===")
+    logger.info("=== 测试情绪分析模块 ===")
     
     # 模拟数据
     platforms_data = [
@@ -554,9 +554,9 @@ if __name__ == "__main__":
         platforms_data, stock_news, history_scores, current_score, history_sentiments
     )
     
-    print(f"\n情绪指数: {result['sentiment']['sentiment_index']} ({result['sentiment']['sentiment_class']})")
-    print(f"流量阶段: {result['flow_stage']['stage_name']} - {result['flow_stage']['signal']}")
-    print(f"情绪动量: {result['momentum']['momentum']} ({result['momentum']['momentum_level']})")
-    print(f"风险等级: {result['risk_level']}")
-    print(f"\n===总结===\n{result['summary']}")
-    print(f"\n操作建议: {result['advice']}")
+    logger.info(f"\n情绪指数: {result['sentiment']['sentiment_index']} ({result['sentiment']['sentiment_class']})")
+    logger.info(f"流量阶段: {result['flow_stage']['stage_name']} - {result['flow_stage']['signal']}")
+    logger.info(f"情绪动量: {result['momentum']['momentum']} ({result['momentum']['momentum_level']})")
+    logger.info(f"风险等级: {result['risk_level']}")
+    logger.info(f"\n===总结===\n{result['summary']}")
+    logger.info(f"\n操作建议: {result['advice']}")

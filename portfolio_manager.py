@@ -12,6 +12,9 @@ from datetime import datetime
 # 导入必要的模块
 from portfolio_db import portfolio_db
 import config
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PortfolioManager:
@@ -134,9 +137,9 @@ class PortfolioManager:
         Returns:
             分析结果字典
         """
-        print(f"\n{'='*60}")
-        print(f"开始分析股票: {stock_code}")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"开始分析股票: {stock_code}")
+        logger.info(f"{'='*60}\n")
         
         try:
             # 导入app.py中的分析函数
@@ -173,17 +176,17 @@ class PortfolioManager:
             # 检查结果
             if not result.get("success", False):
                 error_msg = result.get("error", "未知错误")
-                print(f"\n[ERROR] 分析失败: {error_msg}")
+                logger.error(f"\n[ERROR] 分析失败: {error_msg}")
                 return {"success": False, "error": error_msg}
             
-            print(f"\n{'='*60}")
-            print(f"分析完成！")
-            print(f"{'='*60}\n")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"分析完成！")
+            logger.info(f"{'='*60}\n")
             
             return result
             
         except Exception as e:
-            print(f"\n[ERROR] 分析失败: {str(e)}")
+            logger.error(f"\n[ERROR] 分析失败: {str(e)}")
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}
@@ -205,16 +208,16 @@ class PortfolioManager:
         Returns:
             批量分析结果字典
         """
-        print(f"\n{'='*60}")
-        print(f"开始批量分析 (顺序模式): {len(stock_codes)}只股票")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"开始批量分析 (顺序模式): {len(stock_codes)}只股票")
+        logger.info(f"{'='*60}\n")
         
         start_time = time.time()
         results = []
         failed = []
         
         for i, code in enumerate(stock_codes, 1):
-            print(f"\n--- 分析进度: {i}/{len(stock_codes)} ---")
+            logger.info(f"\n--- 分析进度: {i}/{len(stock_codes)} ---")
             
             if progress_callback:
                 progress_callback(i, len(stock_codes), code, "analyzing")
@@ -238,7 +241,7 @@ class PortfolioManager:
                         progress_callback(i, len(stock_codes), code, "failed")
                     
             except Exception as e:
-                print(f"[ERROR] 股票 {code} 分析失败: {str(e)}")
+                logger.error(f"[ERROR] 股票 {code} 分析失败: {str(e)}")
                 failed.append({
                     "code": code,
                     "error": str(e)
@@ -248,10 +251,10 @@ class PortfolioManager:
         
         elapsed_time = time.time() - start_time
         
-        print(f"\n{'='*60}")
-        print(f"批量分析完成！")
-        print(f"成功: {len(results)}只, 失败: {len(failed)}只, 耗时: {elapsed_time:.1f}秒")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"批量分析完成！")
+        logger.error(f"成功: {len(results)}只, 失败: {len(failed)}只, 耗时: {elapsed_time:.1f}秒")
+        logger.info(f"{'='*60}\n")
         
         return {
             "success": True,
@@ -281,9 +284,9 @@ class PortfolioManager:
         Returns:
             批量分析结果字典
         """
-        print(f"\n{'='*60}")
-        print(f"开始批量分析 (并行模式): {len(stock_codes)}只股票, 并发数: {max_workers}")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"开始批量分析 (并行模式): {len(stock_codes)}只股票, 并发数: {max_workers}")
+        logger.info(f"{'='*60}\n")
         
         start_time = time.time()
         results = []
@@ -310,7 +313,7 @@ class PortfolioManager:
                             "code": code,
                             "result": result
                         })
-                        print(f"\n[{completed}/{len(stock_codes)}] {code} 分析完成")
+                        logger.info(f"\n[{completed}/{len(stock_codes)}] {code} 分析完成")
                         if progress_callback:
                             progress_callback(completed, len(stock_codes), code, "success")
                     else:
@@ -318,7 +321,7 @@ class PortfolioManager:
                             "code": code,
                             "error": result.get("error", "未知错误")
                         })
-                        print(f"\n[{completed}/{len(stock_codes)}] {code} 分析失败: {result.get('error')}")
+                        logger.error(f"\n[{completed}/{len(stock_codes)}] {code} 分析失败: {result.get('error')}")
                         if progress_callback:
                             progress_callback(completed, len(stock_codes), code, "failed")
                         
@@ -327,16 +330,16 @@ class PortfolioManager:
                         "code": code,
                         "error": str(e)
                     })
-                    print(f"\n[{completed}/{len(stock_codes)}] {code} 分析异常: {str(e)}")
+                    logger.error(f"\n[{completed}/{len(stock_codes)}] {code} 分析异常: {str(e)}")
                     if progress_callback:
                         progress_callback(completed, len(stock_codes), code, "error")
         
         elapsed_time = time.time() - start_time
         
-        print(f"\n{'='*60}")
-        print(f"批量分析完成！")
-        print(f"成功: {len(results)}只, 失败: {len(failed)}只, 耗时: {elapsed_time:.1f}秒")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"批量分析完成！")
+        logger.error(f"成功: {len(results)}只, 失败: {len(failed)}只, 耗时: {elapsed_time:.1f}秒")
+        logger.info(f"{'='*60}\n")
         
         return {
             "success": True,
@@ -398,7 +401,7 @@ class PortfolioManager:
         saved_ids = []
         
         if not analysis_results.get("success"):
-            print("[WARN] 分析未成功，跳过保存")
+            logger.warning("[WARN] 分析未成功，跳过保存")
             return saved_ids
         
         for item in analysis_results.get("results", []):
@@ -408,7 +411,7 @@ class PortfolioManager:
             # 获取持仓股票ID
             stock = self.db.get_stock_by_code(code)
             if not stock:
-                print(f"[WARN] 未找到持仓股票: {code}，跳过保存")
+                logger.warning(f"[WARN] 未找到持仓股票: {code}，跳过保存")
                 continue
             
             stock_id = stock['id']
@@ -488,9 +491,9 @@ class PortfolioManager:
                 saved_ids.append(analysis_id)
                 
             except Exception as e:
-                print(f"[ERROR] 保存分析结果失败 ({code}): {str(e)}")
+                logger.error(f"[ERROR] 保存分析结果失败 ({code}): {str(e)}")
         
-        print(f"\n[OK] 保存分析结果: {len(saved_ids)}条记录")
+        logger.info(f"\n[OK] 保存分析结果: {len(saved_ids)}条记录")
         return saved_ids
     
     # ==================== 分析历史查询 ====================
@@ -518,21 +521,21 @@ portfolio_manager = PortfolioManager()
 
 if __name__ == "__main__":
     # 测试代码
-    print("="*60)
-    print("持仓管理器测试")
-    print("="*60)
+    logger.info("="*60)
+    logger.info("持仓管理器测试")
+    logger.info("="*60)
     
     manager = PortfolioManager()
     
     # 测试添加持仓
     success, msg, stock_id = manager.add_stock("000001", "平安银行", 12.5, 1000, "测试持仓")
-    print(f"\n添加持仓: {msg}")
+    logger.info(f"\n添加持仓: {msg}")
     
     # 测试获取所有持仓
     stocks = manager.get_all_stocks()
-    print(f"\n持仓数量: {len(stocks)}")
+    logger.info(f"\n持仓数量: {len(stocks)}")
     for stock in stocks:
-        print(f"  {stock['code']} {stock['name']} - 成本:{stock['cost_price']}, 数量:{stock['quantity']}")
+        logger.info(f"  {stock['code']} {stock['name']} - 成本:{stock['cost_price']}, 数量:{stock['quantity']}")
     
-    print("\n[OK] 持仓管理器测试完成")
+    logger.info("\n[OK] 持仓管理器测试完成")
 

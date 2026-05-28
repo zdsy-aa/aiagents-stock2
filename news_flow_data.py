@@ -664,40 +664,40 @@ if __name__ == "__main__":
     fetcher = NewsFlowDataFetcher()
     
     # 测试获取平台列表
-    print("=== 支持的平台列表 ===")
+    logger.info("=== 支持的平台列表 ===")
     platforms = fetcher.get_platform_list()
-    print(f"共支持 {len(platforms)} 个平台：")
+    logger.info(f"共支持 {len(platforms)} 个平台：")
     for p in platforms[:5]:
-        print(f"  - {p['name']} ({p['code']}) - 权重:{p['weight']}")
+        logger.info(f"  - {p['name']} ({p['code']}) - 权重:{p['weight']}")
     
     # 测试获取单个平台
-    print("\n=== 测试获取微博热搜 ===")
+    logger.info("\n=== 测试获取微博热搜 ===")
     result = fetcher.get_platform_news('weibo')
     if result['success']:
-        print(f"✅ 成功获取 {result['count']} 条新闻")
-        print(f"前3条标题：")
+        logger.info(f"✅ 成功获取 {result['count']} 条新闻")
+        logger.info(f"前3条标题：")
         for news in result['data'][:3]:
-            print(f"  {news['rank']}. {news['title']}")
+            logger.info(f"  {news['rank']}. {news['title']}")
     else:
-        print(f"❌ 失败: {result['error']}")
+        logger.error(f"❌ 失败: {result['error']}")
     
-    print("\n=== 测试获取财经平台 ===")
+    logger.info("\n=== 测试获取财经平台 ===")
     result = fetcher.get_multi_platform_news(category='finance')
-    print(f"总共 {result['total_platforms']} 个平台")
-    print(f"成功 {result['success_count']} 个")
-    print(f"失败 {result['failed_count']} 个")
+    logger.info(f"总共 {result['total_platforms']} 个平台")
+    logger.info(f"成功 {result['success_count']} 个")
+    logger.error(f"失败 {result['failed_count']} 个")
     
     # 提取股票相关新闻
     stock_news = fetcher.extract_stock_related_news(result['platforms_data'])
-    print(f"\n✅ 提取到 {len(stock_news)} 条股票相关新闻")
+    logger.info(f"\n✅ 提取到 {len(stock_news)} 条股票相关新闻")
     
     # 计算流量得分
     flow_score = fetcher.calculate_flow_score(result['platforms_data'])
-    print(f"\n流量得分: {flow_score['total_score']}")
-    print(f"流量等级: {flow_score['level']}")
+    logger.info(f"\n流量得分: {flow_score['total_score']}")
+    logger.info(f"流量等级: {flow_score['level']}")
     
     # 获取热门话题
     hot_topics = fetcher.get_hot_topics(result['platforms_data'])
-    print(f"\n热门话题TOP5:")
+    logger.info(f"\n热门话题TOP5:")
     for i, topic in enumerate(hot_topics[:5], 1):
-        print(f"  {i}. {topic['topic']} (热度:{topic['heat']}, 跨{topic['cross_platform']}平台)")
+        logger.info(f"  {i}. {topic['topic']} (热度:{topic['heat']}, 跨{topic['cross_platform']}平台)")
