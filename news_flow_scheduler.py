@@ -8,12 +8,13 @@ import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
+from base_scheduler import BaseScheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class NewsFlowScheduler:
+class NewsFlowScheduler(BaseScheduler):
     """新闻流量定时任务调度器"""
     
     # 任务类型定义
@@ -37,8 +38,8 @@ class NewsFlowScheduler:
     
     def __init__(self):
         """初始化调度器"""
-        self.running = False
-        self.thread = None
+        super().__init__()
+        self.loop_interval = 30  # 每30秒检查一次（与原 _schedule_loop 行为一致）
         self.lock = threading.Lock()
         
         # 任务配置
@@ -119,11 +120,9 @@ class NewsFlowScheduler:
                 job.tag('news_flow', 'deep_analysis')
                 logger.info(f"[新闻流量] 注册深度分析任务，间隔{interval}分钟")
             
-            # 启动调度线程
-            self.running = True
-            self.thread = threading.Thread(target=self._schedule_loop, daemon=True)
-            self.thread.start()
-            
+            # 启动调度线程（BaseScheduler 负责置 running 标志 + 跑 _run_loop 循环）
+            self._start_thread()
+
             logger.info("[新闻流量] 调度器已启动")
     
     def stop(self):
@@ -134,21 +133,10 @@ class NewsFlowScheduler:
             logger.info("[新闻流量] 调度器已停止")
     
     def _clear_jobs(self):
-        """清除本模块的任务"""
-        jobs_to_remove = [job for job in schedule.jobs if 'news_flow' in job.tags]
-        for job in jobs_to_remove:
-            schedule.cancel_job(job)
-    
-    def _schedule_loop(self):
-        """调度循环"""
-        while self.running:
-            try:
-                schedule.run_pending()
-            except Exception as e:
-                logger.error(f"[新闻流量] 调度循环异常: {e}")
-            time.sleep(30)  # 每30秒检查一次
-    
-    def _log_task(self, task_name: str, task_type: str, 
+        """清除本模块的任务（委托 BaseScheduler.clear_jobs 按 tag 清理）"""
+        self.clear_jobs('news_flow')
+
+    def _log_task(self, task_name: str, task_type: str,
                   status: str, message: str = '', 
                   duration: float = 0, snapshot_id: int = None):
         """记录任务日志"""

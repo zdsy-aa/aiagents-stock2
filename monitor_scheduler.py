@@ -13,16 +13,16 @@ from typing import Dict, Optional
 import json
 import os
 import logging
+from base_scheduler import BaseScheduler
 
 logger = logging.getLogger(__name__)
 
-class TradingTimeScheduler:
+class TradingTimeScheduler(BaseScheduler):
     """交易时间调度器"""
-    
+
     def __init__(self, monitor_service):
+        super().__init__()
         self.monitor_service = monitor_service
-        self.running = False
-        self.thread = None
         self.config = self._load_config()
         
     def _load_config(self) -> Dict:
@@ -142,21 +142,18 @@ class TradingTimeScheduler:
             logger.warning("⚠️ 调度器未启用")
             return
         
-        self.running = True
-        self.thread = threading.Thread(target=self._schedule_loop, daemon=True)
-        self.thread.start()
+        self._start_thread()
         logger.info("✅ 调度器已启动")
-    
+
     def stop_scheduler(self):
         """停止调度器"""
-        self.running = False
+        # 注意：此处沿用原行为 schedule.clear() 清全部 job（非按 tag）
         schedule.clear()
-        if self.thread:
-            self.thread.join(timeout=5)
+        self._stop_thread()
         logger.info("⏹️ 调度器已停止")
-    
-    def _schedule_loop(self):
-        """调度循环"""
+
+    def _run_loop(self):
+        """调度循环（重写 BaseScheduler._run_loop：内含交易时段智能检测）"""
         # 清空之前的任务
         schedule.clear()
         
