@@ -1,0 +1,7 @@
+# Aider 默认配置：DeepSeek 驱动的"手"。
+# API key 自动读仓库根 .env 的 DEEPSEEK_API_KEY（端点 https://api.deepseek.com/v1）。
+model: deepseek/deepseek-chat   # DeepSeek-V3，便宜，干机械活；难逻辑用 ds.sh reasoner 切 R1
+auto-commits: true              # 每次改动自动 git commit，便于回滚
+auto-test: true                 # 改动后自动跑测试
+test-cmd: python -m pytest -q tests/
+gitignore: false                # 不让 aider 自动改写 .gitignore（我们已手动维护）
