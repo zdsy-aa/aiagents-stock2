@@ -54,3 +54,7 @@ class BaseScheduler:
         """取消所有带指定 tag 的 schedule job，保留其它 job。"""
         for job in [j for j in schedule.jobs if tag in j.tags]:
             schedule.cancel_job(job)
+
+    def is_alive(self) -> bool:
+        """running 且后台线程存在并存活时返回 True。"""
+        return bool(self.running and self.thread is not None and self.thread.is_alive())

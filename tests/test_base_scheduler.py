@@ -86,3 +86,13 @@ def test_clear_jobs_removes_only_tagged():
     assert "alpha" not in remaining_tags
     assert "beta" in remaining_tags
     assert len(schedule.jobs) == 1
+
+
+def test_is_alive_reflects_thread_state():
+    s = BaseScheduler()
+    s.loop_interval = 0.01
+    assert s.is_alive() is False          # 未启动
+    s._start_thread()
+    assert s.is_alive() is True           # 启动后
+    s._stop_thread()
+    assert s.is_alive() is False          # 停止后
