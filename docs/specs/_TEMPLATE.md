@@ -14,8 +14,8 @@
 <逐条说明改什么、改成什么样；能给伪代码/签名就给。不要含糊。>
 
 ## 验收（DeepSeek 必须让其通过）
-- 测试命令：`python -m pytest -q tests/test_xxx.py`
-- 期望：全部通过；不破坏 `python -m pytest -q tests/` 其余用例。
+- 测试命令：`python3 -m pytest -q tests/test_xxx.py`（本机用 python3，不是 python）
+- 期望：全部通过；不破坏 `python3 -m pytest -q tests/` 其余用例。
 
 ## 不做（out-of-scope）
 - <明确不要碰的东西，防止 DeepSeek 扩大改动>
