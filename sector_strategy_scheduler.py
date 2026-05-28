@@ -12,16 +12,18 @@ from sector_strategy_engine import SectorStrategyEngine
 from notification_service import notification_service
 import json
 import logging
+from base_scheduler import BaseScheduler
 
 logger = logging.getLogger(__name__)
 
 
-class SectorStrategyScheduler:
+class SectorStrategyScheduler(BaseScheduler):
     """智策定时分析调度器"""
-    
+
+    loop_interval = 60  # 每分钟检查一次（与原 _schedule_loop 行为一致）
+
     def __init__(self):
-        self.running = False
-        self.thread = None
+        super().__init__()
         self.schedule_time = "09:00"  # 默认上午9点
         self.enabled = False
         self.last_run_time = None
@@ -44,27 +46,17 @@ class SectorStrategyScheduler:
         self.schedule_time = schedule_time
         self.enabled = True
         
-        # 先清除所有带sector_strategy标签的任务
-        try:
-            jobs_to_remove = [job for job in schedule.jobs if 'sector_strategy' in job.tags]
-            for job in jobs_to_remove:
-                schedule.cancel_job(job)
-            logger.info(f"[智策定时] 清除了 {len(jobs_to_remove)} 个旧任务")
-        except Exception as e:
-            logger.error(f"[智策定时] 清除旧任务时出错: {e}")
-        
+        # 先清除所有带sector_strategy标签的任务（不影响其他模块）
+        self.clear_jobs('sector_strategy')
+
         # 设置定时任务（确保只添加一次）
         job = schedule.every().day.at(schedule_time).do(self._run_analysis_safe)
         job.tag('sector_strategy')
         logger.info(f"[智策定时] 添加新任务: 每天 {schedule_time}")
-        
-        # 设置运行标志
-        self.running = True
-        
-        # 启动后台线程
-        self.thread = threading.Thread(target=self._schedule_loop, daemon=True)
-        self.thread.start()
-        
+
+        # 启动后台线程（BaseScheduler 负责置 running 标志 + 跑 _run_loop 循环）
+        self._start_thread()
+
         logger.info(f"[智策定时] ✓ 定时任务已启动，每天 {schedule_time} 运行")
         return True
     
@@ -74,29 +66,16 @@ class SectorStrategyScheduler:
             logger.info("[智策定时] 调度器未运行")
             return False
         
-        self.running = False
         self.enabled = False
         
         # 只清除智策的任务，不影响其他模块
-        jobs_to_remove = [job for job in schedule.jobs if 'sector_strategy' in job.tags]
-        for job in jobs_to_remove:
-            schedule.cancel_job(job)
-        logger.info(f"[智策定时] 清除了 {len(jobs_to_remove)} 个任务")
+        self.clear_jobs('sector_strategy')
+
+        # 停止后台线程（置 running=False 并 join）
+        self._stop_thread()
         
         logger.info("[智策定时] ✓ 定时任务已停止")
         return True
-    
-    def _schedule_loop(self):
-        """定时任务循环"""
-        logger.info("[智策定时] 后台线程已启动")
-        
-        while self.running:
-            try:
-                schedule.run_pending()
-                time.sleep(60)  # 每分钟检查一次
-            except Exception as e:
-                logger.error(f"[智策定时] ✗ 调度循环出错: {e}")
-                time.sleep(60)
     
     def _run_analysis_safe(self):
         """运行智策分析（带锁保护，防止并发执行）"""
