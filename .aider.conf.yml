@@ -3,5 +3,5 @@
 model: deepseek/deepseek-chat   # DeepSeek-V3，便宜，干机械活；难逻辑用 ds.sh reasoner 切 R1
 auto-commits: true              # 每次改动自动 git commit，便于回滚
 auto-test: true                 # 改动后自动跑测试
-test-cmd: python -m pytest -q tests/
+test-cmd: python3 -m pytest -q tests/   # 本机无 python 命令，必须 python3，否则 auto-test 静默不运行
 gitignore: false                # 不让 aider 自动改写 .gitignore（我们已手动维护）
