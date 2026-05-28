@@ -73,6 +73,17 @@ services:
       - ./tdx-data:/app/data
     environment:
       - TZ=Asia/Shanghai
+    # tdx-stock-web 启动需 ~70s(连通达信服务器+加载5万+股票代码)；Dockerfile 内
+    # start-period=5s 过短，会在启动期就把它判为 unhealthy，进而门控住依赖它
+    # (condition: service_healthy) 的主应用 agentsstock 与 chanlun-updater，导致
+    # 单次 `docker compose up` 以 "dependency failed to start" 中止。此处覆盖：
+    # start_period 90s 覆盖正常启动窗口，使整栈一次性可靠拉起。
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     restart: unless-stopped
     networks:
       - agentsstock-network
