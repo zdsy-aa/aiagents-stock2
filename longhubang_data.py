@@ -8,6 +8,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings('ignore')
 
@@ -22,7 +25,7 @@ class LonghubangDataFetcher:
         Args:
             api_key: StockAPI的API密钥（可选，普通请求每日免费1000次）
         """
-        print("[智瞰龙虎] 龙虎榜数据获取器初始化...")
+        logger.info("[智瞰龙虎] 龙虎榜数据获取器初始化...")
         # self.base_url = "https://api-lhb.zhongdu.net"
         self.base_url = "http://lhb-api.ws4.cn/v1"
        # self.base_url = "https://www.stockapi.com.cn/v1"
@@ -54,17 +57,17 @@ class LonghubangDataFetcher:
                     if data.get('code') == 20000:
                         return data
                     else:
-                        print(f"    API返回错误: {data.get('msg', '未知错误')}")
+                        logger.error(f"    API返回错误: {data.get('msg', '未知错误')}")
                         return None
                 else:
-                    print(f"    HTTP错误: {response.status_code}")
+                    logger.error(f"    HTTP错误: {response.status_code}")
                     
             except Exception as e:
                 if attempt < self.max_retries - 1:
-                    print(f"    请求失败，{self.retry_delay}秒后重试... (尝试 {attempt + 1}/{self.max_retries})")
+                    logger.error(f"    请求失败，{self.retry_delay}秒后重试... (尝试 {attempt + 1}/{self.max_retries})")
                     time.sleep(self.retry_delay)
                 else:
-                    print(f"    请求失败，已达最大重试次数: {e}")
+                    logger.error(f"    请求失败，已达最大重试次数: {e}")
                     return None
         
         return None
@@ -79,7 +82,7 @@ class LonghubangDataFetcher:
         Returns:
             dict: 龙虎榜数据
         """
-        print(f"[智瞰龙虎] 获取 {date} 的龙虎榜数据...")
+        logger.info(f"[智瞰龙虎] 获取 {date} 的龙虎榜数据...")
         
         # url = f"{self.base_url}"
         url = f"{self.base_url}/youzi/all"
@@ -88,10 +91,10 @@ class LonghubangDataFetcher:
         result = self._safe_request(url, params)
         
         if result and result.get('data'):
-            print(f"    ✓ 成功获取 {len(result['data'])} 条龙虎榜记录")
+            logger.info(f"    ✓ 成功获取 {len(result['data'])} 条龙虎榜记录")
             return result
         else:
-            print(f"    ✗ 未获取到数据")
+            logger.info(f"    ✗ 未获取到数据")
             return None
     
     def get_longhubang_data_range(self, start_date, end_date):
@@ -105,7 +108,7 @@ class LonghubangDataFetcher:
         Returns:
             list: 龙虎榜数据列表
         """
-        print(f"[智瞰龙虎] 获取 {start_date} 至 {end_date} 的龙虎榜数据...")
+        logger.info(f"[智瞰龙虎] 获取 {start_date} 至 {end_date} 的龙虎榜数据...")
         
         all_data = []
         
@@ -125,7 +128,7 @@ class LonghubangDataFetcher:
             # 下一天
             current_date += timedelta(days=1)
         
-        print(f"[智瞰龙虎] ✓ 共获取 {len(all_data)} 条记录")
+        logger.info(f"[智瞰龙虎] ✓ 共获取 {len(all_data)} 条记录")
         return all_data
     
     def get_recent_days_data(self, days=5):
@@ -308,9 +311,9 @@ class LonghubangDataFetcher:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎数据采集模块")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎数据采集模块")
+    logger.info("=" * 60)
     
     fetcher = LonghubangDataFetcher()
     
@@ -322,14 +325,14 @@ if __name__ == "__main__":
         # 分析数据
         summary = fetcher.analyze_data_summary(result['data'])
         
-        print("\n" + "=" * 60)
-        print("数据采集成功！")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("数据采集成功！")
+        logger.info("=" * 60)
         
         # 格式化输出
         formatted_text = fetcher.format_data_for_ai(result['data'], summary)
-        print(formatted_text[:2000])  # 显示前2000字符
-        print(f"\n... (总长度: {len(formatted_text)} 字符)")
+        logger.info(formatted_text[:2000])  # 显示前2000字符
+        logger.info(f"\n... (总长度: {len(formatted_text)} 字符)")
     else:
-        print("\n数据采集失败")
+        logger.error("\n数据采集失败")
 

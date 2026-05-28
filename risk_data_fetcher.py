@@ -12,6 +12,9 @@ from typing import Dict, Any
 import time
 import warnings
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 屏蔽pywencai的Node.js警告信息（不影响功能）
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -36,7 +39,7 @@ class RiskDataFetcher:
         Returns:
             包含风险数据的字典
         """
-        print(f"\n正在获取 {symbol} 的风险数据...")
+        logger.info(f"\n正在获取 {symbol} 的风险数据...")
         
         risk_data = {
             'symbol': symbol,
@@ -49,47 +52,47 @@ class RiskDataFetcher:
         
         try:
             # 1. 获取限售解禁数据
-            print("   查询限售解禁数据...")
+            logger.info("   查询限售解禁数据...")
             lifting_ban = self._get_lifting_ban_data(symbol)
             risk_data['lifting_ban'] = lifting_ban
             if lifting_ban and lifting_ban.get('has_data'):
-                print(f"   获取到限售解禁数据")
+                logger.info(f"   获取到限售解禁数据")
             else:
-                print(f"   暂无限售解禁数据")
+                logger.info(f"   暂无限售解禁数据")
             
             time.sleep(1)  # 避免请求过快
             
             # 2. 获取大股东减持公告
-            print("   查询大股东减持公告...")
+            logger.info("   查询大股东减持公告...")
             reduction = self._get_shareholder_reduction_data(symbol)
             risk_data['shareholder_reduction'] = reduction
             if reduction and reduction.get('has_data'):
-                print(f"   获取到大股东减持数据")
+                logger.info(f"   获取到大股东减持数据")
             else:
-                print(f"   暂无大股东减持数据")
+                logger.info(f"   暂无大股东减持数据")
             
             time.sleep(1)  # 避免请求过快
             
             # 3. 获取近期重要事件
-            print("   查询近期重要事件...")
+            logger.info("   查询近期重要事件...")
             events = self._get_important_events_data(symbol)
             risk_data['important_events'] = events
             if events and events.get('has_data'):
-                print(f"   获取到重要事件数据")
+                logger.info(f"   获取到重要事件数据")
             else:
-                print(f"   暂无重要事件数据")
+                logger.info(f"   暂无重要事件数据")
             
             # 如果至少有一个数据源成功，则认为获取成功
             if (lifting_ban and lifting_ban.get('has_data')) or \
                (reduction and reduction.get('has_data')) or \
                (events and events.get('has_data')):
                 risk_data['data_success'] = True
-                print(f"风险数据获取完成")
+                logger.info(f"风险数据获取完成")
             else:
-                print(f"未获取到风险相关数据")
+                logger.info(f"未获取到风险相关数据")
                 
         except Exception as e:
-            print(f"风险数据获取失败: {str(e)}")
+            logger.error(f"风险数据获取失败: {str(e)}")
             risk_data['error'] = str(e)
         
         return risk_data
@@ -322,13 +325,13 @@ class RiskDataFetcher:
                 col_name = df_result.columns[0]
                 first_value = df_result.iloc[0][col_name]
                 if isinstance(first_value, pd.DataFrame):
-                    print(f"   检测到嵌套DataFrame（列名: {col_name}），正在展开...")
+                    logger.info(f"   检测到嵌套DataFrame（列名: {col_name}），正在展开...")
                     df_result = first_value
             
             return df_result if not df_result.empty else None
             
         except Exception as e:
-            print(f"   转换DataFrame时出错: {str(e)}")
+            logger.error(f"   转换DataFrame时出错: {str(e)}")
             return None
     
     def format_risk_data_for_ai(self, risk_data: Dict[str, Any]) -> str:
@@ -399,7 +402,7 @@ class RiskDataFetcher:
             return "\n".join(formatted_text) if formatted_text else "暂无风险数据"
             
         except Exception as e:
-            print(f"格式化风险数据时出错: {str(e)}")
+            logger.error(f"格式化风险数据时出错: {str(e)}")
             import traceback
             traceback.print_exc()
             return f"格式化风险数据时出错: {str(e)}"
@@ -454,16 +457,16 @@ if __name__ == "__main__":
     
     # 测试获取风险数据
     test_symbol = "600000"
-    print(f"测试获取 {test_symbol} 的风险数据...")
+    logger.info(f"测试获取 {test_symbol} 的风险数据...")
     
     risk_data = fetcher.get_risk_data(test_symbol)
     
-    print("\n" + "=" * 60)
-    print("获取结果:")
-    print("=" * 60)
-    print(f"数据获取成功: {risk_data['data_success']}")
+    logger.info("\n" + "=" * 60)
+    logger.info("获取结果:")
+    logger.info("=" * 60)
+    logger.info(f"数据获取成功: {risk_data['data_success']}")
     
     if risk_data['data_success']:
-        print("\n格式化的风险数据:")
-        print(fetcher.format_risk_data_for_ai(risk_data))
+        logger.info("\n格式化的风险数据:")
+        logger.info(fetcher.format_risk_data_for_ai(risk_data))
 

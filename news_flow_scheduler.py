@@ -353,31 +353,31 @@ news_flow_scheduler = NewsFlowScheduler()
 
 # 测试代码
 if __name__ == "__main__":
-    print("=== 测试新闻流量调度器 ===")
+    logger.info("=== 测试新闻流量调度器 ===")
     
     # 获取状态
     status = news_flow_scheduler.get_status()
-    print(f"\n调度器状态:")
-    print(f"  运行中: {status['running']}")
-    print(f"  任务配置: {status['task_enabled']}")
-    print(f"  任务间隔: {status['task_intervals']}")
+    logger.info(f"\n调度器状态:")
+    logger.info(f"  运行中: {status['running']}")
+    logger.info(f"  任务配置: {status['task_enabled']}")
+    logger.info(f"  任务间隔: {status['task_intervals']}")
     
     # 启动调度器
-    print("\n启动调度器...")
+    logger.info("\n启动调度器...")
     news_flow_scheduler.start()
     
     # 再次获取状态
     status = news_flow_scheduler.get_status()
-    print(f"\n调度器状态:")
-    print(f"  运行中: {status['running']}")
-    print(f"  下次运行: {status['next_run_times']}")
+    logger.info(f"\n调度器状态:")
+    logger.info(f"  运行中: {status['running']}")
+    logger.info(f"  下次运行: {status['next_run_times']}")
     
     # 等待一会儿
-    print("\n等待5秒...")
+    logger.info("\n等待5秒...")
     time.sleep(5)
     
     # 停止调度器
-    print("\n停止调度器...")
+    logger.info("\n停止调度器...")
     news_flow_scheduler.stop()
     
-    print("\n测试完成")
+    logger.info("\n测试完成")

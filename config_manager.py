@@ -6,6 +6,9 @@
 import os
 from pathlib import Path
 from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
@@ -157,7 +160,7 @@ class ConfigManager:
                         
                         config[key] = value
         except Exception as e:
-            print(f"读取.env文件失败: {e}")
+            logger.error(f"读取.env文件失败: {e}")
         
         # 确保所有默认配置项都存在
         for key, info in self.default_config.items():
@@ -215,7 +218,7 @@ class ConfigManager:
             
             return True
         except Exception as e:
-            print(f"保存.env文件失败: {e}")
+            logger.error(f"保存.env文件失败: {e}")
             return False
     
     def get_config_info(self) -> Dict[str, Dict[str, Any]]:

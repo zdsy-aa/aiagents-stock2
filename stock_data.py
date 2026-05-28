@@ -8,6 +8,9 @@ import requests
 import json
 import pywencai
 from data_source_manager import data_source_manager
+import logging
+
+logger = logging.getLogger(__name__)
 
 class StockDataFetcher:
     """股票数据获取类"""
@@ -122,10 +125,10 @@ class StockDataFetcher:
                             except Exception:
                                 pass
             except Exception as e:
-                print(f"[Akshare] 获取个股详细信息失败: {e}")
+                logger.error(f"[Akshare] 获取个股详细信息失败: {e}")
                 # 如果akshare失败，尝试从tushare获取
                 if self.data_source_manager.tushare_available and info['name'] == '未知':
-                    print(f"[Tushare] 尝试获取基本信息（tushare）...")
+                    logger.info(f"[Tushare] 尝试获取基本信息（tushare）...")
                     try:
                         ts_code = self.data_source_manager._convert_to_ts_code(symbol)
                         df = self.data_source_manager.tushare_api.daily_basic(
@@ -137,9 +140,9 @@ class StockDataFetcher:
                             info['pe_ratio'] = row.get('pe', 'N/A')
                             info['pb_ratio'] = row.get('pb', 'N/A')
                             info['market_cap'] = row.get('total_mv', 'N/A')
-                            print(f"[Tushare] ✅ 成功获取部分信息")
+                            logger.info(f"[Tushare] ✅ 成功获取部分信息")
                     except Exception as te:
-                        print(f"[Tushare] ❌ 获取失败: {te}")
+                        logger.error(f"[Tushare] ❌ 获取失败: {te}")
             
             # 方法2: 尝试获取历史价格和涨跌幅（如果网络允许）
             # try:
@@ -179,7 +182,7 @@ class StockDataFetcher:
             #     print(f"[Akshare] 获取实时数据失败: {e}")
             #     # 如果实时数据获取失败，尝试使用数据源管理器获取历史数据（支持tushare备用）
             try:
-                print(f"[数据源管理器] 尝试获取最近交易数据...")
+                logger.info(f"[数据源管理器] 尝试获取最近交易数据...")
                 hist_data = self.data_source_manager.get_stock_hist_data(
                     symbol=symbol,
                     start_date=(datetime.now() - timedelta(days=30)).strftime('%Y%m%d'),
@@ -197,9 +200,9 @@ class StockDataFetcher:
                             prev_close = hist_data.iloc[-2]['close']
                             change_pct = ((latest['close'] - prev_close) / prev_close) * 100
                             info['change_percent'] = round(change_pct, 2)
-                        print(f"[数据源管理器] ✅ 成功获取价格数据")
+                        logger.info(f"[数据源管理器] ✅ 成功获取价格数据")
             except Exception as e2:
-                print(f"获取历史数据也失败: {e2}")
+                logger.error(f"获取历史数据也失败: {e2}")
             
             # 方法3: 使用百度估值数据获取市盈率和市净率
             if info['pe_ratio'] == 'N/A':
@@ -212,7 +215,7 @@ class StockDataFetcher:
                             if 0 < pe_val <= 1000:
                                 info['pe_ratio'] = pe_val
                 except Exception as e:
-                    print(f"获取市盈率失败: {e}")
+                    logger.error(f"获取市盈率失败: {e}")
             
             if info['pb_ratio'] == 'N/A':
                 try:
@@ -224,12 +227,12 @@ class StockDataFetcher:
                             if 0 < pb_val <= 100:
                                 info['pb_ratio'] = pb_val
                 except Exception as e:
-                    print(f"获取市净率失败: {e}")
+                    logger.error(f"获取市净率失败: {e}")
             
             return info
             
         except Exception as e:
-            print(f"获取中国股票信息完全失败: {e}")
+            logger.error(f"获取中国股票信息完全失败: {e}")
             # 返回基本信息，避免完全失败
             return {
                 "symbol": symbol,
@@ -293,7 +296,7 @@ class StockDataFetcher:
                             except Exception:
                                 pass
             except Exception as e:
-                print(f"获取港股实时数据失败: {e}")
+                logger.error(f"获取港股实时数据失败: {e}")
             
             # 方法2: 尝试使用历史数据获取价格信息
             if info['current_price'] == 'N/A':
@@ -310,12 +313,12 @@ class StockDataFetcher:
                             change_pct = ((latest['收盘'] - prev_close) / prev_close) * 100
                             info['change_percent'] = round(change_pct, 2)
                 except Exception as e:
-                    print(f"获取港股历史数据失败: {e}")
+                    logger.error(f"获取港股历史数据失败: {e}")
             
             return info
             
         except Exception as e:
-            print(f"获取港股信息完全失败: {e}")
+            logger.error(f"获取港股信息完全失败: {e}")
             # 返回基本信息
             return {
                 "symbol": symbol,
@@ -460,7 +463,7 @@ class StockDataFetcher:
                     df['Date'] = pd.to_datetime(df['Date'])
                     df.set_index('Date', inplace=True)
                 
-                print(f"✅ 成功获取 {symbol} 的历史数据，共 {len(df)} 条记录")
+                logger.info(f"✅ 成功获取 {symbol} 的历史数据，共 {len(df)} 条记录")
                 return df
             else:
                 return {"error": "所有数据源均无法获取历史数据"}
@@ -635,7 +638,7 @@ class StockDataFetcher:
                 if balance_sheet is not None and not balance_sheet.empty:
                     financial_data["balance_sheet"] = balance_sheet.head(8).to_dict('records')
             except Exception as e:
-                print(f"获取资产负债表失败: {e}")
+                logger.error(f"获取资产负债表失败: {e}")
             
             # 2. 获取利润表
             try:
@@ -643,7 +646,7 @@ class StockDataFetcher:
                 if income_statement is not None and not income_statement.empty:
                     financial_data["income_statement"] = income_statement.head(8).to_dict('records')
             except Exception as e:
-                print(f"获取利润表失败: {e}")
+                logger.error(f"获取利润表失败: {e}")
             
             # 3. 获取现金流量表
             try:
@@ -651,7 +654,7 @@ class StockDataFetcher:
                 if cash_flow is not None and not cash_flow.empty:
                     financial_data["cash_flow"] = cash_flow.head(8).to_dict('records')
             except Exception as e:
-                print(f"获取现金流量表失败: {e}")
+                logger.error(f"获取现金流量表失败: {e}")
             
             # 4. 获取主要财务指标
             try:
@@ -690,7 +693,7 @@ class StockDataFetcher:
                             
                             financial_data["financial_ratios"] = financial_ratios
             except Exception as e:
-                print(f"获取财务指标失败: {e}")
+                logger.error(f"获取财务指标失败: {e}")
             
             # 注意：季报数据现在由 quarterly_report_data.py 模块使用 akshare 获取（8期完整季报）
             # 不再使用问财获取季报，避免重复
@@ -698,7 +701,7 @@ class StockDataFetcher:
             return financial_data
             
         except Exception as e:
-            print(f"获取中国股票财务数据失败: {e}")
+            logger.error(f"获取中国股票财务数据失败: {e}")
             return financial_data
     
     # 已删除 _get_quarter_data_from_wencai 方法
@@ -723,7 +726,7 @@ class StockDataFetcher:
         
         try:
             # 使用akshare获取港股财务指标（东方财富数据源）
-            print(f"正在获取港股 {hk_code} 的财务指标...")
+            logger.info(f"正在获取港股 {hk_code} 的财务指标...")
             try:
                 financial_indicator = ak.stock_hk_financial_indicator_em(symbol=hk_code)
                 
@@ -755,22 +758,22 @@ class StockDataFetcher:
                         "每手股": self._safe_convert(indicator_dict.get('每手股', 'N/A')),
                     }
                     
-                    print(f"✅ 成功获取港股 {hk_code} 的财务指标")
-                    print(f"   ROE: {financial_data['financial_ratios']['ROE股东权益回报率']}")
-                    print(f"   市盈率: {financial_data['financial_ratios']['市盈率']}")
-                    print(f"   市净率: {financial_data['financial_ratios']['市净率']}")
+                    logger.info(f"✅ 成功获取港股 {hk_code} 的财务指标")
+                    logger.info(f"   ROE: {financial_data['financial_ratios']['ROE股东权益回报率']}")
+                    logger.info(f"   市盈率: {financial_data['financial_ratios']['市盈率']}")
+                    logger.info(f"   市净率: {financial_data['financial_ratios']['市净率']}")
                 else:
-                    print(f"⚠️ 未获取到港股 {hk_code} 的财务指标数据")
+                    logger.warning(f"⚠️ 未获取到港股 {hk_code} 的财务指标数据")
                     financial_data["note"] = "未获取到财务数据"
                     
             except Exception as e:
-                print(f"⚠️ 获取港股财务指标失败: {e}")
+                logger.error(f"⚠️ 获取港股财务指标失败: {e}")
                 financial_data["note"] = f"获取财务数据失败: {str(e)}"
             
             return financial_data
             
         except Exception as e:
-            print(f"获取港股财务数据异常: {e}")
+            logger.error(f"获取港股财务数据异常: {e}")
             financial_data["note"] = f"获取失败: {str(e)}"
             return financial_data
     
@@ -795,7 +798,7 @@ class StockDataFetcher:
                 if balance_sheet is not None and not balance_sheet.empty:
                     financial_data["balance_sheet"] = balance_sheet.iloc[:, :4].to_dict('index')
             except Exception as e:
-                print(f"获取资产负债表失败: {e}")
+                logger.error(f"获取资产负债表失败: {e}")
             
             # 2. 利润表
             try:
@@ -803,7 +806,7 @@ class StockDataFetcher:
                 if income_stmt is not None and not income_stmt.empty:
                     financial_data["income_statement"] = income_stmt.iloc[:, :4].to_dict('index')
             except Exception as e:
-                print(f"获取利润表失败: {e}")
+                logger.error(f"获取利润表失败: {e}")
             
             # 3. 现金流量表
             try:
@@ -811,7 +814,7 @@ class StockDataFetcher:
                 if cash_flow is not None and not cash_flow.empty:
                     financial_data["cash_flow"] = cash_flow.iloc[:, :4].to_dict('index')
             except Exception as e:
-                print(f"获取现金流量表失败: {e}")
+                logger.error(f"获取现金流量表失败: {e}")
             
             # 4. 财务比率（从info中提取）
             financial_data["financial_ratios"] = {
@@ -834,7 +837,7 @@ class StockDataFetcher:
             return financial_data
             
         except Exception as e:
-            print(f"获取美股财务数据失败: {e}")
+            logger.error(f"获取美股财务数据失败: {e}")
             return financial_data
     
     # 已删除 get_fund_flow_data 方法（使用问财）

@@ -472,7 +472,7 @@ news_flow_alert_system = NewsFlowAlertSystem()
 
 # 测试代码
 if __name__ == "__main__":
-    print("=== 测试预警系统 ===")
+    logger.info("=== 测试预警系统 ===")
     
     # 模拟数据
     current_data = {
@@ -501,14 +501,14 @@ if __name__ == "__main__":
         current_data, history_data, sentiment_data
     )
     
-    print(f"\n触发 {len(alerts)} 个预警：")
+    logger.info(f"\n触发 {len(alerts)} 个预警：")
     for alert in alerts:
         level_info = NewsFlowAlertSystem.ALERT_LEVELS.get(alert['alert_level'], {})
-        print(f"\n[{level_info.get('name', alert['alert_level'])}] {alert['title']}")
-        print(f"  {alert['content'][:100]}...")
+        logger.info(f"\n[{level_info.get('name', alert['alert_level'])}] {alert['title']}")
+        logger.info(f"  {alert['content'][:100]}...")
     
     # 获取阈值配置
-    print("\n当前阈值配置：")
+    logger.info("\n当前阈值配置：")
     config = news_flow_alert_system.get_threshold_config()
     for key, value in config.items():
-        print(f"  {key}: {value}")
+        logger.info(f"  {key}: {value}")

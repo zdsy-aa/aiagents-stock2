@@ -596,25 +596,25 @@ news_flow_engine = NewsFlowEngine()
 
 # 测试代码
 if __name__ == "__main__":
-    print("=== 测试新闻流量分析引擎 ===")
+    logger.info("=== 测试新闻流量分析引擎 ===")
     
     # 运行快速分析
-    print("\n--- 快速分析 ---")
+    logger.info("\n--- 快速分析 ---")
     result = news_flow_engine.run_quick_analysis(category='finance')
     
     if result['success']:
-        print(f"✅ 分析成功！快照ID: {result.get('snapshot_id')}")
-        print(f"\n流量得分: {result['flow_data']['total_score']}")
-        print(f"流量等级: {result['flow_data']['level']}")
-        print(f"股票相关新闻: {len(result['stock_news'])} 条")
-        print(f"热门话题: {len(result['hot_topics'])} 个")
+        logger.info(f"✅ 分析成功！快照ID: {result.get('snapshot_id')}")
+        logger.info(f"\n流量得分: {result['flow_data']['total_score']}")
+        logger.info(f"流量等级: {result['flow_data']['level']}")
+        logger.info(f"股票相关新闻: {len(result['stock_news'])} 条")
+        logger.info(f"热门话题: {len(result['hot_topics'])} 个")
         
         if result.get('sentiment_data'):
             sentiment = result['sentiment_data'].get('sentiment', {})
-            print(f"\n情绪指数: {sentiment.get('sentiment_index', 'N/A')}")
-            print(f"情绪分类: {sentiment.get('sentiment_class', 'N/A')}")
+            logger.info(f"\n情绪指数: {sentiment.get('sentiment_index', 'N/A')}")
+            logger.info(f"情绪分类: {sentiment.get('sentiment_class', 'N/A')}")
             
             flow_stage = result['sentiment_data'].get('flow_stage', {})
-            print(f"流量阶段: {flow_stage.get('stage_name', 'N/A')}")
+            logger.info(f"流量阶段: {flow_stage.get('stage_name', 'N/A')}")
     else:
-        print(f"❌ 分析失败: {result.get('error')}")
+        logger.error(f"❌ 分析失败: {result.get('error')}")

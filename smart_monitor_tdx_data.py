@@ -9,6 +9,8 @@ import pandas as pd
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 
+logger = logging.getLogger(__name__)
+
 
 class SmartMonitorTDXDataFetcher:
     """TDX数据获取器"""
@@ -419,22 +421,22 @@ if __name__ == '__main__':
     fetcher = SmartMonitorTDXDataFetcher(base_url="http://127.0.0.1:8080")
     
     # 测试平安银行(000001)
-    print("测试获取平安银行(000001)数据...")
+    logger.info("测试获取平安银行(000001)数据...")
     data = fetcher.get_comprehensive_data('000001')
     
     if data:
-        print("\n实时行情:")
-        print(f"  股票名称: {data.get('name')}")
-        print(f"  当前价: {data.get('current_price')} 元")
-        print(f"  涨跌幅: {data.get('change_pct')}%")
-        print(f"  数据源: {data.get('data_source')}")
+        logger.info("\n实时行情:")
+        logger.info(f"  股票名称: {data.get('name')}")
+        logger.info(f"  当前价: {data.get('current_price')} 元")
+        logger.info(f"  涨跌幅: {data.get('change_pct')}%")
+        logger.info(f"  数据源: {data.get('data_source')}")
         
-        print("\n技术指标:")
-        print(f"  MA5: {data.get('ma5', 0):.2f}")
-        print(f"  MA20: {data.get('ma20', 0):.2f}")
-        print(f"  MACD: {data.get('macd', 0):.4f}")
-        print(f"  RSI(6): {data.get('rsi6', 0):.2f}")
-        print(f"  趋势: {data.get('trend')}")
+        logger.info("\n技术指标:")
+        logger.info(f"  MA5: {data.get('ma5', 0):.2f}")
+        logger.info(f"  MA20: {data.get('ma20', 0):.2f}")
+        logger.info(f"  MACD: {data.get('macd', 0):.4f}")
+        logger.info(f"  RSI(6): {data.get('rsi6', 0):.2f}")
+        logger.info(f"  趋势: {data.get('trend')}")
     else:
-        print("获取数据失败")
+        logger.error("获取数据失败")
 

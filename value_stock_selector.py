@@ -10,6 +10,9 @@ import pywencai
 from datetime import datetime
 from typing import Tuple, Optional
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ValueStockSelector:
@@ -40,13 +43,13 @@ class ValueStockSelector:
             (success, dataframe, message)
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"💎 低估值选股 - 数据获取中")
-            print(f"{'='*60}")
-            print(f"策略: PE≤20 + PB≤1.5 + 股息率≥1% + 资产负债率≤30%")
-            print(f"排除: ST、科创板、创业板")
-            print(f"排序: 按流通市值由小到大")
-            print(f"目标: 筛选前{top_n}只股票")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"💎 低估值选股 - 数据获取中")
+            logger.info(f"{'='*60}")
+            logger.info(f"策略: PE≤20 + PB≤1.5 + 股息率≥1% + 资产负债率≤30%")
+            logger.info(f"排除: ST、科创板、创业板")
+            logger.info(f"排序: 按流通市值由小到大")
+            logger.info(f"目标: 筛选前{top_n}只股票")
 
             # 构建问财查询语句
             query = (
@@ -60,8 +63,8 @@ class ValueStockSelector:
                 "按流通市值由小到大排名"
             )
 
-            print(f"\n查询语句: {query}")
-            print(f"正在调用问财接口...")
+            logger.info(f"\n查询语句: {query}")
+            logger.info(f"正在调用问财接口...")
 
             # 调用pywencai
             result = pywencai.get(query=query, loop=True)
@@ -75,14 +78,14 @@ class ValueStockSelector:
             if df_result is None or df_result.empty:
                 return False, None, "未获取到符合条件的股票数据"
 
-            print(f"✅ 成功获取 {len(df_result)} 只股票")
+            logger.info(f"✅ 成功获取 {len(df_result)} 只股票")
 
             # 显示获取到的列名
-            print(f"\n获取到的数据字段:")
+            logger.info(f"\n获取到的数据字段:")
             for col in df_result.columns[:15]:
-                print(f"  - {col}")
+                logger.info(f"  - {col}")
             if len(df_result.columns) > 15:
-                print(f"  ... 还有 {len(df_result.columns) - 15} 个字段")
+                logger.info(f"  ... 还有 {len(df_result.columns) - 15} 个字段")
 
             # 保存原始数据
             self.raw_data = df_result
@@ -90,15 +93,15 @@ class ValueStockSelector:
             # 取前N只
             if len(df_result) > top_n:
                 selected = df_result.head(top_n)
-                print(f"\n从 {len(df_result)} 只股票中选出前 {top_n} 只")
+                logger.info(f"\n从 {len(df_result)} 只股票中选出前 {top_n} 只")
             else:
                 selected = df_result
-                print(f"\n共 {len(df_result)} 只符合条件的股票")
+                logger.info(f"\n共 {len(df_result)} 只符合条件的股票")
 
             self.selected_stocks = selected
 
             # 显示选中的股票
-            print(f"\n✅ 选中的股票:")
+            logger.info(f"\n✅ 选中的股票:")
             for idx, row in selected.iterrows():
                 code = row.get('股票代码', 'N/A')
                 name = row.get('股票简称', 'N/A')
@@ -107,15 +110,15 @@ class ValueStockSelector:
                 div_rate = row.get('股息率', 'N/A')
                 debt_ratio = row.get('资产负债率', 'N/A')
                 cap = row.get('流通市值', 'N/A')
-                print(f"  {idx+1}. {code} {name} - PE:{pe} PB:{pb} 股息率:{div_rate}% 负债率:{debt_ratio}% 流通市值:{cap}")
+                logger.info(f"  {idx+1}. {code} {name} - PE:{pe} PB:{pb} 股息率:{div_rate}% 负债率:{debt_ratio}% 流通市值:{cap}")
 
-            print(f"{'='*60}\n")
+            logger.info(f"{'='*60}\n")
 
             return True, selected, f"成功筛选出{len(selected)}只低估值优质股票"
 
         except Exception as e:
             error_msg = f"获取数据失败: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}")
             import traceback
             traceback.print_exc()
             return False, None, error_msg
@@ -135,10 +138,10 @@ class ValueStockSelector:
             elif isinstance(result, list):
                 return pd.DataFrame(result)
             else:
-                print(f"⚠️ 未知的数据格式: {type(result)}")
+                logger.warning(f"⚠️ 未知的数据格式: {type(result)}")
                 return None
         except Exception as e:
-            print(f"转换DataFrame失败: {e}")
+            logger.error(f"转换DataFrame失败: {e}")
             return None
 
     def get_stock_codes(self) -> list:
@@ -164,12 +167,12 @@ class ValueStockSelector:
 
 # 测试
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试低估值选股模块")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("测试低估值选股模块")
+    logger.info("=" * 60)
 
     selector = ValueStockSelector()
     success, df, msg = selector.get_value_stocks(top_n=10)
-    print(f"\n结果: {msg}")
+    logger.info(f"\n结果: {msg}")
     if success and df is not None:
-        print(f"共 {len(df)} 只股票")
+        logger.info(f"共 {len(df)} 只股票")

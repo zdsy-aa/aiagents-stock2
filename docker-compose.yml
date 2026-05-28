@@ -1,3 +1,11 @@
+# 统一 Docker 日志 rotation：每容器最多 3 个 10MB 文件，防 json-file 日志无限增长
+# （主应用已全面 print→logger 走 stdout，日志量较大，rotation 尤为必要）
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   agentsstock:
     build:
@@ -5,6 +13,7 @@ services:
       dockerfile: Dockerfile
     image: aiagents-stock-app
     container_name: agentsstock1
+    logging: *default-logging
     ports:
       - "8503:8503"
     volumes:
@@ -35,6 +44,7 @@ services:
   aktools:
     image: aiagents-stock-app
     container_name: aktools
+    logging: *default-logging
     command: ["python", "-m", "aktools", "--host", "0.0.0.0", "--port", "8088"]
     ports:
       - "8088:8088"
@@ -55,6 +65,7 @@ services:
       context: ./tdx-api
       dockerfile: Dockerfile
     container_name: tdx-stock-web
+    logging: *default-logging
     ports:
       - "8080:8080"
     volumes:
@@ -71,6 +82,7 @@ services:
   kline-updater:
     build: ./scheduler
     container_name: kline-updater
+    logging: *default-logging
     environment:
       - TZ=Asia/Shanghai
     volumes:
@@ -89,6 +101,7 @@ services:
   chanlun-updater:
     image: aiagents-stock-app
     container_name: chanlun-updater
+    logging: *default-logging
     command: ["sh", "/app/chanlun_schedule.sh"]
     environment:
       - TZ=Asia/Shanghai

@@ -14,6 +14,9 @@ from deepseek_client import DeepSeekClient
 import time
 import json
 import config
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MainForceAnalyzer:
     """主力选股分析器 - 批量整体分析"""
@@ -61,9 +64,9 @@ class MainForceAnalyzer:
         }
         
         try:
-            print(f"\n{'='*80}")
-            print(f"🚀 主力选股智能分析系统 - 批量整体分析")
-            print(f"{'='*80}\n")
+            logger.info(f"\n{'='*80}")
+            logger.info(f"🚀 主力选股智能分析系统 - 批量整体分析")
+            logger.info(f"{'='*80}\n")
             
             # 步骤1: 获取主力资金净流入前100名股票
             success, raw_data, message = self.selector.get_main_force_stocks(
@@ -97,9 +100,9 @@ class MainForceAnalyzer:
             self.raw_stocks = filtered_data
             
             # 步骤3: 整体数据分析（不是逐个分析）
-            print(f"\n{'='*80}")
-            print(f"🤖 AI分析师团队开始整体分析...")
-            print(f"{'='*80}\n")
+            logger.info(f"\n{'='*80}")
+            logger.info(f"🤖 AI分析师团队开始整体分析...")
+            logger.info(f"{'='*80}\n")
             
             # 准备整体数据摘要
             overall_summary = self._prepare_overall_summary(filtered_data)
@@ -115,9 +118,9 @@ class MainForceAnalyzer:
             self.fundamental_analysis = fundamental_analysis
             
             # 步骤4: 综合决策，精选优质标的
-            print(f"\n{'='*80}")
-            print(f"👔 资深研究员综合评估并精选标的...")
-            print(f"{'='*80}\n")
+            logger.info(f"\n{'='*80}")
+            logger.info(f"👔 资深研究员综合评估并精选标的...")
+            logger.info(f"{'='*80}\n")
             
             final_recommendations = self._select_best_stocks(
                 filtered_data,
@@ -182,7 +185,7 @@ class MainForceAnalyzer:
     def _fund_flow_overall_analysis(self, df: pd.DataFrame, summary: str) -> str:
         """资金流向整体分析"""
         
-        print("💰 资金流向分析师整体分析中...")
+        logger.info("💰 资金流向分析师整体分析中...")
         
         # 准备数据表格
         data_table = self._prepare_data_table(df, focus='fund_flow')
@@ -228,7 +231,7 @@ class MainForceAnalyzer:
         
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
         
-        print("  ✅ 资金流向整体分析完成")
+        logger.info("  ✅ 资金流向整体分析完成")
         time.sleep(1)
         
         return analysis
@@ -236,7 +239,7 @@ class MainForceAnalyzer:
     def _industry_overall_analysis(self, df: pd.DataFrame, summary: str) -> str:
         """行业板块整体分析"""
         
-        print("📊 行业板块分析师整体分析中...")
+        logger.info("📊 行业板块分析师整体分析中...")
         
         # 准备数据表格
         data_table = self._prepare_data_table(df, focus='industry')
@@ -282,7 +285,7 @@ class MainForceAnalyzer:
         
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
         
-        print("  ✅ 行业板块整体分析完成")
+        logger.info("  ✅ 行业板块整体分析完成")
         time.sleep(1)
         
         return analysis
@@ -290,7 +293,7 @@ class MainForceAnalyzer:
     def _fundamental_overall_analysis(self, df: pd.DataFrame, summary: str) -> str:
         """财务基本面整体分析"""
         
-        print("📈 财务基本面分析师整体分析中...")
+        logger.info("📈 财务基本面分析师整体分析中...")
         
         # 准备数据表格
         data_table = self._prepare_data_table(df, focus='fundamental')
@@ -336,7 +339,7 @@ class MainForceAnalyzer:
         
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
         
-        print("  ✅ 财务基本面整体分析完成")
+        logger.info("  ✅ 财务基本面整体分析完成")
         time.sleep(1)
         
         return analysis
@@ -471,7 +474,7 @@ class MainForceAnalyzer:
 """
         
         try:
-            print("  🔍 正在综合评估并精选标的...")
+            logger.info("  🔍 正在综合评估并精选标的...")
             
             messages = [
                 {"role": "system", "content": "你是资深股票研究员，擅长综合多维度分析做出投资决策。"},
@@ -505,7 +508,7 @@ class MainForceAnalyzer:
             return recommendations
             
         except Exception as e:
-            print(f"  ❌ JSON解析失败，使用备选方案: {e}")
+            logger.error(f"  ❌ JSON解析失败，使用备选方案: {e}")
             
             # 降级方案：按主力资金排序返回前N个
             main_fund_cols = [col for col in df.columns if '主力' in col and '净流入' in col]
@@ -539,26 +542,26 @@ class MainForceAnalyzer:
     def _print_final_recommendations(self, recommendations: List[Dict]):
         """打印最终推荐结果"""
         if not recommendations:
-            print("❌ 未能生成推荐结果")
+            logger.error("❌ 未能生成推荐结果")
             return
         
-        print(f"\n{'='*80}")
-        print(f"⭐ 最终精选推荐 ({len(recommendations)}只)")
-        print(f"{'='*80}\n")
+        logger.info(f"\n{'='*80}")
+        logger.info(f"⭐ 最终精选推荐 ({len(recommendations)}只)")
+        logger.info(f"{'='*80}\n")
         
         for rec in recommendations:
-            print(f"【第{rec['rank']}名】{rec['symbol']} - {rec['name']}")
-            print(f"{'-'*60}")
+            logger.info(f"【第{rec['rank']}名】{rec['symbol']} - {rec['name']}")
+            logger.info(f"{'-'*60}")
             
-            print(f"📌 推荐理由:")
+            logger.info(f"📌 推荐理由:")
             for reason in rec.get('reasons', []):
-                print(f"   • {reason}")
+                logger.info(f"   • {reason}")
             
-            print(f"\n💡 投资亮点: {rec.get('highlights', 'N/A')}")
-            print(f"⚠️  风险提示: {rec.get('risks', 'N/A')}")
-            print(f"📊 建议仓位: {rec.get('position', 'N/A')}")
-            print(f"⏰ 投资周期: {rec.get('investment_period', 'N/A')}")
-            print(f"{'='*80}\n")
+            logger.info(f"\n💡 投资亮点: {rec.get('highlights', 'N/A')}")
+            logger.warning(f"⚠️  风险提示: {rec.get('risks', 'N/A')}")
+            logger.info(f"📊 建议仓位: {rec.get('position', 'N/A')}")
+            logger.info(f"⏰ 投资周期: {rec.get('investment_period', 'N/A')}")
+            logger.info(f"{'='*80}\n")
 
 # 全局实例
 main_force_analyzer = MainForceAnalyzer()

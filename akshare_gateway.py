@@ -79,6 +79,53 @@ TDX_CAPABLE_FUNCS = {
 }
 
 
+class CircuitBreaker:
+    """按 key（接口名）的连续失败熔断器。
+
+    被封接口即使设了 5s 短超时，每次仍要开线程等满超时再失败，且不停刷日志。
+    熔断器在某接口连续失败达 threshold 次后进入「熔断」状态 cooldown 秒：
+    其间 allow() 直接返回 False，调用方跳过该接口、不再无效重试，消除卡顿与日志噪音。
+    cooldown 过后半开放行一次试探——成功则重置，失败则重新熔断。线程安全。
+    """
+
+    def __init__(self, threshold=3, cooldown=300):
+        self.threshold = threshold
+        self.cooldown = cooldown
+        self._fails = {}        # key -> 连续失败次数
+        self._open_until = {}   # key -> 熔断截止时间戳
+        self._lock = threading.Lock()
+
+    def allow(self, key):
+        """是否放行调用。熔断且未到冷却终点 → False。"""
+        with self._lock:
+            until = self._open_until.get(key, 0)
+            return not (until and time.time() < until)
+
+    def record_success(self, key):
+        with self._lock:
+            self._fails.pop(key, None)
+            self._open_until.pop(key, None)
+
+    def record_failure(self, key):
+        """记一次失败；返回 True 表示本次失败刚好触发熔断（供调用方打一次提示日志）。"""
+        with self._lock:
+            n = self._fails.get(key, 0) + 1
+            self._fails[key] = n
+            if n >= self.threshold and key not in self._open_until:
+                self._open_until[key] = time.time() + self.cooldown
+                return True
+            if n >= self.threshold:
+                # 已熔断状态下半开试探又失败：续上冷却
+                self._open_until[key] = time.time() + self.cooldown
+            return False
+
+    def open_keys(self):
+        """当前处于熔断中的接口名列表。"""
+        now = time.time()
+        with self._lock:
+            return [k for k, until in self._open_until.items() if until > now]
+
+
 class RateLimiter:
     """令牌桶限流器"""
 
@@ -573,6 +620,12 @@ class AKShareGateway:
         # 被封接口调 akshare 时的短超时（秒），避免卡死
         self.blocked_timeout = int(os.getenv("BLOCKED_AKSHARE_TIMEOUT", "5"))
 
+        # 被封接口熔断：连续失败 N 次后熔断 cooldown 秒，跳过无效重试、消除日志刷屏
+        self.em_breaker = CircuitBreaker(
+            threshold=int(os.getenv("BLOCKED_BREAKER_THRESHOLD", "3")),
+            cooldown=int(os.getenv("BLOCKED_BREAKER_COOLDOWN", "300")),
+        )
+
         self.tushare = TushareClient()
 
         # ---- 限流 ----
@@ -808,6 +861,10 @@ class AKShareGateway:
             clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
             if is_blocked:
+                # 熔断中：直接跳过，省掉开线程等满超时的无效重试与日志刷屏
+                if not self.em_breaker.allow(func_name):
+                    return None
+
                 # 被封接口：设置短超时，用线程执行避免卡死
                 result = [None]
                 exc = [None]
@@ -823,11 +880,19 @@ class AKShareGateway:
                 t.join(timeout=self.blocked_timeout)
 
                 if t.is_alive():
-                    logger.debug(f"[AKShare] {func_name} 超时({self.blocked_timeout}s)，跳过")
+                    if self.em_breaker.record_failure(func_name):
+                        logger.warning(f"[熔断] {func_name} 连续失败已熔断 {self.em_breaker.cooldown}s（超时），期间跳过")
+                    else:
+                        logger.debug(f"[AKShare] {func_name} 超时({self.blocked_timeout}s)，跳过")
                     return None
                 if exc[0]:
-                    logger.debug(f"[AKShare] {func_name} 被封: {str(exc[0])[:60]}")
+                    if self.em_breaker.record_failure(func_name):
+                        logger.warning(f"[熔断] {func_name} 连续失败已熔断 {self.em_breaker.cooldown}s（被封），期间跳过")
+                    else:
+                        logger.debug(f"[AKShare] {func_name} 被封: {str(exc[0])[:60]}")
                     return None
+                # 成功（含半开试探成功）：重置熔断
+                self.em_breaker.record_success(func_name)
                 return result[0]
             else:
                 # 正常接口：直接调用
@@ -959,6 +1024,7 @@ class AKShareGateway:
             'AKShare': '✅ 可用（部分接口被封）',
             'Tushare': '✅ 可用' if self.tushare.available else '❌ 未配置',
             '被封接口数': len(BLOCKED_EM_FUNCS),
+            '熔断中接口': self.em_breaker.open_keys(),
             '降级链': '本地 → TDX → AKTools → AKShare → Tushare',
         }
 
