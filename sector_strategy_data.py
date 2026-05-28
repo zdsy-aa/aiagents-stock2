@@ -143,7 +143,7 @@ class SectorStrategyDataFetcher:
             
             # 转换为字典格式
             sectors = {}
-            for idx, row in df.iterrows():
+            for row in df.to_dict('records'):  # to_dict 比 iterrows 快 ~10-30x，语义等价
                 sector_name = row.get('板块名称', '')
                 if sector_name:
                     sectors[sector_name] = {
@@ -174,7 +174,7 @@ class SectorStrategyDataFetcher:
             
             # 转换为字典格式
             concepts = {}
-            for idx, row in df.iterrows():
+            for row in df.to_dict('records'):  # to_dict 比 iterrows 快 ~10-30x，语义等价
                 concept_name = row.get('板块名称', '')
                 if concept_name:
                     concepts[concept_name] = {

@@ -6,6 +6,13 @@ from chanlun_selector import ChanlunSelector, DISPLAY_NAMES
 _TYPES = ["1买", "2买", "3买"]
 
 
+# 缠论信号每日收盘后批量预计算、当天只读，故缓存读取结果，避免每次多选交互都重开
+# SQLite 查询。TTL 30 分钟远短于「每日 20:00 更新一次」，不会读到跨日陈旧数据。
+@st.cache_data(ttl=1800, show_spinner=False)
+def _cached_picks(types_key: tuple):
+    return ChanlunSelector().get_chanlun_picks(types=list(types_key))
+
+
 def display_chanlun_selector():
     st.markdown('<div class="ftc-section">🌀 缠论选股</div>', unsafe_allow_html=True)
     st.caption("严格多级别缠论（日线本级别 + 30分钟次级别确认）·"
@@ -13,7 +20,7 @@ def display_chanlun_selector():
                " 信号每日收盘后批量预计算，本页只读结果（初筛候选，请人工复核）。")
 
     picked = st.multiselect("买点类型", _TYPES, default=_TYPES)
-    ok, df, msg = ChanlunSelector().get_chanlun_picks(types=picked)
+    ok, df, msg = _cached_picks(tuple(picked))
     st.info(msg)
     if not ok or df is None:
         return
