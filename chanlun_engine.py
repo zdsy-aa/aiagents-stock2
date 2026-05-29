@@ -351,20 +351,18 @@ def analyze(df_day: pd.DataFrame, df_30m: Optional[pd.DataFrame] = None) -> Chan
     return day
 
 
-def buy_point_with_exit(bp: TradePoint, pivots: List[Pivot]) -> dict:
-    """把一个买点打包成含止损/离场条件的 dict。"""
+def stop_loss_for(bp: TradePoint, pivots: List[Pivot]) -> float:
+    """买点止损位：买点下方关键位（买点前最近中枢下沿 ZD 与买点价×0.98 取低者）。"""
     nearest_zd = None
     for pv in pivots:
         if pv.i_end <= bp.i:
             nearest_zd = pv.ZD
     base_stop = bp.price * 0.98
     stop = min(base_stop, nearest_zd) if nearest_zd is not None else base_stop
-    exit_rule = ("出现日线级别一卖(顶背驰,30m确认)或二卖(反弹不创新高)或三卖"
-                 "(跌破中枢ZD后反抽不破)；或跌破止损位离场")
-    return {
-        "signal_type": bp.kind,
-        "buy_price": round(float(bp.price), 3),
-        "stop_loss": round(float(stop), 3),
-        "exit_rule": exit_rule,
-        "note": bp.note,
-    }
+    return round(float(stop), 3)
+
+
+def match_sell_after(bp: TradePoint, points: List[TradePoint]) -> Optional[TradePoint]:
+    """买点之后出现的首个卖点（一卖/二卖/三卖），作为对应卖出信号；没有则 None。"""
+    sells = [p for p in points if p.kind in ("1卖", "2卖", "3卖") and p.i > bp.i]
+    return min(sells, key=lambda p: p.i) if sells else None

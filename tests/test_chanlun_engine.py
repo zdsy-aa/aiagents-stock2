@@ -192,14 +192,25 @@ def test_analyze_multilevel_marks_confirmation():
         assert ("30m确认" in p.note) or ("无次级别确认" in p.note) or p.note != ""
 
 
-from chanlun_engine import buy_point_with_exit, TradePoint, Pivot
+from chanlun_engine import stop_loss_for, match_sell_after, TradePoint, Pivot
 
 
-def test_buy_point_with_exit_fields():
+def test_stop_loss_below_buy_price():
     bp = TradePoint("1买", 12, 10.0, "下跌段力度背驰")
     pivots = [Pivot(ZG=14, ZD=11, GG=16, DD=9, i_start=0, i_end=8, seg_count=3)]
-    info = buy_point_with_exit(bp, pivots)
-    assert info["signal_type"] == "1买"
-    assert info["buy_price"] == 10.0
-    assert info["stop_loss"] <= 10.0           # 止损不高于买点
-    assert isinstance(info["exit_rule"], str) and len(info["exit_rule"]) > 0
+    assert stop_loss_for(bp, pivots) <= 10.0   # 止损不高于买点
+
+
+def test_match_sell_after_returns_first_later_sell():
+    bp = TradePoint("1买", 12, 10.0, "下跌段力度背驰")
+    points = [bp,
+              TradePoint("1卖", 20, 13.0, "上涨段力度背驰"),
+              TradePoint("2卖", 25, 12.5, "反弹不创新高")]
+    sell = match_sell_after(bp, points)
+    assert sell is not None and sell.kind == "1卖" and sell.i == 20
+
+
+def test_match_sell_after_none_when_no_later_sell():
+    bp = TradePoint("1买", 30, 10.0, "x")
+    points = [bp, TradePoint("1卖", 20, 13.0, "更早的卖点")]  # 卖点在买点之前
+    assert match_sell_after(bp, points) is None
