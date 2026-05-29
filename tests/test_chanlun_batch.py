@@ -16,4 +16,22 @@ def test_scan_codes_writes_db_without_error():
     for _, r in df.iterrows():
         assert r["signal_type"] in ("1买", "2买", "3买")
         assert r["stop_loss"] <= r["buy_price"]
-        assert isinstance(r["exit_rule"], str) and len(r["exit_rule"]) > 0
+        assert isinstance(r["buy_reason"], str)
+        assert r["sell_type"] in ("", "1卖", "2卖", "3卖")
+
+
+def test_export_scan_csv(tmp_path):
+    import pandas as pd
+    from chanlun_batch import export_scan_csv
+    db = ChanlunSignalDB(db_path=str(tmp_path / "s.db"))
+    db.upsert_signals([
+        {"code": "600000", "name": "浦发", "board": "沪主板", "signal_type": "1买",
+         "signal_date": "2026-05-26", "buy_price": 10.0, "buy_reason": "x", "stop_loss": 9.8,
+         "sell_type": "", "sell_date": "", "sell_reason": "", "level": "日线",
+         "scan_date": "2026-05-27"}])
+    out = tmp_path / "hist"
+    path = export_scan_csv(db, "2026-05-27", out_dir=str(out))
+    assert os.path.exists(path)
+    assert path.endswith("2026-05-27.csv")
+    df = pd.read_csv(path, dtype=str)
+    assert len(df) == 1 and df.iloc[0]["code"] == "600000"
