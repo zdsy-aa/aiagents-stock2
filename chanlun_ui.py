@@ -1,5 +1,5 @@
 # chanlun_ui.py
-"""缠论选股页：只读 chanlun_signals.db 最新批次，展示买点(含理由)与其后首个卖点(含理由)。"""
+"""缠论选股页：只读 chanlun_signals.db，按扫描日期选批次(默认最新)，展示买点(含理由)与其后首个卖点(含理由)。"""
 import streamlit as st
 from chanlun_selector import ChanlunSelector, DISPLAY_NAMES
 
