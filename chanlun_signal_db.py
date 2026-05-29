@@ -105,6 +105,21 @@ class ChanlunSignalDB(BaseDatabase):
                 "SELECT * FROM signals WHERE scan_date=? ORDER BY signal_date DESC, code",
                 conn, params=(latest,))
 
+    def list_scan_dates(self) -> list:
+        """全部扫描批次日期，去重、倒序(最新在前)，供前台日期下拉。"""
+        with self.conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT scan_date FROM signals ORDER BY scan_date DESC"
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_signals_by_scan_date(self, scan_date: str) -> pd.DataFrame:
+        """返回指定扫描批次的全部信号(列同 get_latest_signals)。"""
+        with self.conn() as conn:
+            return pd.read_sql_query(
+                "SELECT * FROM signals WHERE scan_date=? ORDER BY signal_date DESC, code",
+                conn, params=(scan_date,))
+
     def clear_scan(self, scan_date: str):
         with self.conn() as conn:
             conn.execute("DELETE FROM signals WHERE scan_date=?", (scan_date,))
