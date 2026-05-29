@@ -56,6 +56,8 @@ class ChanlunSignalDB(BaseDatabase):
         return False
 
     def _migrate_unique_key(self, conn):
+        """就地重建 signals 表以升级唯一约束为 4 列键。
+        交集拷贝保留现有数据；exit_rule 等不在 new_cols 内的列被静默丢弃。"""
         old_cols = [r[1] for r in conn.execute("PRAGMA table_info(signals)")]
         conn.execute("""CREATE TABLE signals_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

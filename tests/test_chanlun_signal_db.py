@@ -79,6 +79,9 @@ def test_migrates_old_unique_constraint(tmp_path):
     db = ChanlunSignalDB(db_path=path)  # 触发 init_tables → 迁移
     with db.conn() as c:
         assert c.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == 1
+    with db.conn() as c:
+        row = c.execute("SELECT buy_price, scan_date FROM signals").fetchone()
+        assert row == (10.0, "2026-05-27")
     db.upsert_signals([{"code": "600000", "name": "", "board": "沪主板", "signal_type": "1买",
                         "signal_date": "2026-05-26", "buy_price": 10.0, "buy_reason": "",
                         "stop_loss": 9.8, "sell_type": "", "sell_date": "", "sell_reason": "",
