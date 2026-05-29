@@ -88,3 +88,24 @@ def test_migrates_old_unique_constraint(tmp_path):
                         "level": "日线", "scan_date": "2026-05-28"}])
     with db.conn() as c:
         assert c.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == 2
+
+
+def test_list_scan_dates_distinct_desc():
+    db = _db()
+    base = {"code": "600000", "name": "", "board": "沪主板", "signal_type": "1买",
+            "signal_date": "2026-05-26", "buy_price": 10.0, "buy_reason": "", "stop_loss": 9.8,
+            "sell_type": "", "sell_date": "", "sell_reason": "", "level": "日线"}
+    for sd in ("2026-05-27", "2026-05-28", "2026-05-27"):
+        db.upsert_signals([dict(base, scan_date=sd)])
+    assert db.list_scan_dates() == ["2026-05-28", "2026-05-27"]
+
+
+def test_get_signals_by_scan_date():
+    db = _db()
+    base = {"code": "600000", "name": "", "board": "沪主板", "signal_type": "1买",
+            "signal_date": "2026-05-26", "buy_price": 10.0, "buy_reason": "", "stop_loss": 9.8,
+            "sell_type": "", "sell_date": "", "sell_reason": "", "level": "日线"}
+    db.upsert_signals([dict(base, scan_date="2026-05-27")])
+    db.upsert_signals([dict(base, code="300750", scan_date="2026-05-28")])
+    df = db.get_signals_by_scan_date("2026-05-27")
+    assert len(df) == 1 and df.iloc[0]["code"] == "600000"
