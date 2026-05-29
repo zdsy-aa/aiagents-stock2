@@ -2,11 +2,13 @@
 """缠论选股批量扫描：经 akshare_gw.local 只读 TDX 本地库，算近7交易日买点落库。
 手动：docker exec agentsstock1 python3 /app/chanlun_batch.py"""
 import logging
+import os
 import time
 from datetime import datetime
 import pandas as pd
 
-from chanlun_engine import analyze, buy_point_with_exit
+from base_db import DATA_DIR
+from chanlun_engine import analyze, stop_loss_for, match_sell_after
 from chanlun_universe import list_universe, board_of
 from chanlun_signal_db import ChanlunSignalDB
 
@@ -51,18 +53,35 @@ def scan_codes(codes, db: ChanlunSignalDB, scan_date=None, days=7, name_board=No
                 sig_dt = day_index[p.i]
                 if sig_dt not in recent_dates:
                     continue
-                info = buy_point_with_exit(p, res.pivots)
+                sell = match_sell_after(p, res.points)
+                sell_type = sell_date = sell_reason = ""
+                if sell is not None and 0 <= sell.i < len(day_index):
+                    sell_type = sell.kind
+                    sell_date = pd.Timestamp(day_index[sell.i]).strftime("%Y-%m-%d")
+                    sell_reason = sell.note
                 rows.append({
                     "code": code, "name": name, "board": board,
-                    "signal_type": info["signal_type"],
+                    "signal_type": p.kind,
                     "signal_date": pd.Timestamp(sig_dt).strftime("%Y-%m-%d"),
-                    "buy_price": info["buy_price"], "stop_loss": info["stop_loss"],
-                    "exit_rule": info["exit_rule"], "level": "日线", "scan_date": scan_date,
+                    "buy_price": round(float(p.price), 3), "buy_reason": p.note,
+                    "stop_loss": stop_loss_for(p, res.pivots),
+                    "sell_type": sell_type, "sell_date": sell_date, "sell_reason": sell_reason,
+                    "level": "日线", "scan_date": scan_date,
                 })
         except Exception as e:
             logger.debug(f"[缠论批量] {code} 跳过: {type(e).__name__}: {str(e)[:80]}")
     db.upsert_signals(rows)
     return len(rows)
+
+
+def export_scan_csv(db: ChanlunSignalDB, scan_date: str, out_dir: str = None) -> str:
+    """把指定批次完整名单导出 CSV 备份(仅备份，不参与前台展示)。返回文件路径。"""
+    out_dir = out_dir or os.path.join(DATA_DIR, "chanlun_history")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{scan_date}.csv")
+    df = db.get_signals_by_scan_date(scan_date)
+    df.to_csv(path, index=False, encoding="utf-8-sig")  # utf-8-sig 便于 Excel 中文
+    return path
 
 
 def main():
@@ -78,6 +97,11 @@ def main():
     t0 = time.time()
     n = scan_codes(codes, db, scan_date=scan_date, name_board=name_board)
     logger.info(f"[缠论批量] 完成：写入 {n} 条买点信号，耗时 {time.time()-t0:.0f}s")
+    try:
+        csv_path = export_scan_csv(db, scan_date)
+        logger.info(f"[缠论批量] 已导出 CSV 备份：{csv_path}")
+    except Exception as e:
+        logger.warning(f"[缠论批量] CSV 备份导出失败(不影响落库): {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
