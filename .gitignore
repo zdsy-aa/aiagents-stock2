@@ -37,6 +37,9 @@ __pycache__/
 # 运行期数据库（bind-mount，不入库）
 data/*.db
 
+# 缠论选股每日 CSV 备份（仅备份，不入库）
+data/chanlun_history/
+
 # Aider 运行期产物（聊天历史/输入历史/标签缓存等），不入库
 .aider*
 !.aider.conf.yml
