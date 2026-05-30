@@ -14,16 +14,16 @@ def _cached_picks(types_key: tuple, scan_date: str):
     return ChanlunSelector().get_chanlun_picks(types=list(types_key), scan_date=scan_date)
 
 
-# 单股查询为实时计算(加载2000根30分钟K线+分析)，较重，按规整后代码缓存。TTL 同批量。
-# 先 _normalize 再缓存，使 sh600519 / 600519 命中同一条目，避免重复计算。
+# 单股查询为实时计算(加载2000根30分钟K线+分析)，较重，按代码缓存。TTL 同批量。
+# 入参应是调用侧已 _normalize 的代码，使 sh600519 / 600519 命中同一条目(缓存键=入参)。
 @st.cache_data(ttl=1800, show_spinner="计算中…")
 def _cached_single(code: str):
-    from chanlun_single import query_stock_signals, _normalize
-    return query_stock_signals(_normalize(code))
+    from chanlun_single import query_stock_signals
+    return query_stock_signals(code)
 
 
 def _display_single_stock():
-    from chanlun_single import DISPLAY_NAMES as SINGLE_NAMES
+    from chanlun_single import DISPLAY_NAMES as SINGLE_NAMES, _normalize
     st.caption("输入单只股票代码，实时计算该股全历史所有缠论买卖点（1/2/3买 + 1/2/3卖，"
                "日线本级别 + 30分钟次级别确认）。与批量选股相互独立。")
     code = st.text_input("股票代码", placeholder="如 600519 或 sh600519",
@@ -31,7 +31,7 @@ def _display_single_stock():
     if not code.strip():
         st.info("请输入股票代码后查询")
         return
-    ok, df, msg = _cached_single(code.strip())
+    ok, df, msg = _cached_single(_normalize(code.strip()))  # 规整后再缓存，统一缓存键
     st.info(msg)
     if not ok or df is None:
         return
