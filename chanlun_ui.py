@@ -14,11 +14,12 @@ def _cached_picks(types_key: tuple, scan_date: str):
     return ChanlunSelector().get_chanlun_picks(types=list(types_key), scan_date=scan_date)
 
 
-# 单股查询为实时计算(加载2000根30分钟K线+分析)，较重，按代码缓存。TTL 同批量。
+# 单股查询为实时计算(加载2000根30分钟K线+分析)，较重，按规整后代码缓存。TTL 同批量。
+# 先 _normalize 再缓存，使 sh600519 / 600519 命中同一条目，避免重复计算。
 @st.cache_data(ttl=1800, show_spinner="计算中…")
 def _cached_single(code: str):
-    from chanlun_single import query_stock_signals
-    return query_stock_signals(code)
+    from chanlun_single import query_stock_signals, _normalize
+    return query_stock_signals(_normalize(code))
 
 
 def _display_single_stock():
