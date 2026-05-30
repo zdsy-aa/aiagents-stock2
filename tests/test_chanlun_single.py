@@ -51,7 +51,7 @@ def test_signals_assembled_sorted_desc(monkeypatch):
     ok, df, msg = query_stock_signals("600519")
     assert ok is True and df is not None
     assert list(df.columns) == KEEP_COLS
-    assert df["signal_date"].iloc[0] >= df["signal_date"].iloc[-1]
+    assert list(df["signal_date"]) == sorted(df["signal_date"], reverse=True)
     buys = df[df["signal_type"].isin(["1买", "2买", "3买"])]
     sells = df[df["signal_type"].isin(["1卖", "2卖", "3卖"])]
     assert (buys["stop_loss"].notna()).all()
