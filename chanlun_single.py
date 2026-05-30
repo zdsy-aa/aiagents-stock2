@@ -50,6 +50,8 @@ def query_stock_signals(code: str) -> Tuple[bool, Optional[pd.DataFrame], str]:
             "reason": p.note,
             "level": "日线",
         })
+    if not rows:  # 引擎给了点但索引全越界(理论上需引擎 bug)，按无信号处理
+        return False, None, f"{sym} 全历史未检出缠论买卖点信号"
     df = pd.DataFrame(rows, columns=KEEP_COLS).sort_values(
         "signal_date", ascending=False).reset_index(drop=True)
     return True, df, f"{sym} 全历史共 {len(df)} 个缠论信号（含买卖点）"
