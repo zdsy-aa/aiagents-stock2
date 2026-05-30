@@ -32,12 +32,12 @@ def compute_flags(df: pd.DataFrame) -> pd.DataFrame:
     """逐根六维多头布尔(列=DIMS, 索引=df.index)。NaN 预热期记 False。"""
     c = df["Close"].astype(float)
     h = df["High"].astype(float)
-    l = df["Low"].astype(float)
+    lo = df["Low"].astype(float)
 
     macd_fast = _ema(c, 8) - _ema(c, 13)
     macd = macd_fast > _ema(macd_fast, 5)
 
-    llv8, hhv8 = l.rolling(8).min(), h.rolling(8).max()
+    llv8, hhv8 = lo.rolling(8).min(), h.rolling(8).max()
     rsv = (c - llv8) / (hhv8 - llv8).replace(0, np.nan) * 100
     k = _tdx_sma(rsv, 3, 1)
     kdj = k > _tdx_sma(k, 3, 1)
@@ -48,7 +48,7 @@ def compute_flags(df: pd.DataFrame) -> pd.DataFrame:
     rsi_l = _tdx_sma(up, 13, 1) / _tdx_sma(ab, 13, 1).replace(0, np.nan) * 100
     rsi = rsi_s > rsi_l
 
-    hhv13, llv13 = h.rolling(13).max(), l.rolling(13).min()
+    hhv13, llv13 = h.rolling(13).max(), lo.rolling(13).min()
     lwr_raw = (-(hhv13 - c)) / (hhv13 - llv13).replace(0, np.nan) * 100
     lwr_k = _tdx_sma(lwr_raw, 3, 1)
     lwr = lwr_k > _tdx_sma(lwr_k, 3, 1)
@@ -57,9 +57,8 @@ def compute_flags(df: pd.DataFrame) -> pd.DataFrame:
            + c.rolling(12).mean() + c.rolling(24).mean()) / 4
     bbi_bull = c > bbi
 
-    chg = c - c.shift(1)
-    mtm_s = 100 * _ema(_ema(chg, 5), 3) / _ema(_ema(chg.abs(), 5), 3).replace(0, np.nan)
-    mtm_l = 100 * _ema(_ema(chg, 13), 8) / _ema(_ema(chg.abs(), 13), 8).replace(0, np.nan)
+    mtm_s = 100 * _ema(_ema(diff, 5), 3) / _ema(_ema(ab, 5), 3).replace(0, np.nan)
+    mtm_l = 100 * _ema(_ema(diff, 13), 8) / _ema(_ema(ab, 13), 8).replace(0, np.nan)
     mtm = mtm_s > mtm_l
 
     return pd.DataFrame({"MACD": macd, "KDJ": kdj, "RSI": rsi,
