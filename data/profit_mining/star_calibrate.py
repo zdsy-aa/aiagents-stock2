@@ -134,3 +134,18 @@ def fit_buckets(scored, max_stars=MAX_STARS, min_n=MIN_BUCKET_N):
             return k, cuts, stats
     wr0 = sum(w for _, w, _ in scored) / max(n, 1)
     return 1, [], [{"star": 1, "n": n, "train_win": wr0}]
+
+
+def eval_buckets(scored, cuts):
+    """样本外评估：返回各档 n / oos_win(>=4%) / oos_bigrise(>=10%)。空档为 None。"""
+    buckets = _bucketize(scored, cuts)
+    out = []
+    for i, b in enumerate(buckets):
+        nb = len(b)
+        out.append({
+            "star": i + 1,
+            "n": nb,
+            "oos_win": (sum(w for _, w, _ in b) / nb) if nb else None,
+            "oos_bigrise": (sum(g for _, _, g in b) / nb) if nb else None,
+        })
+    return out

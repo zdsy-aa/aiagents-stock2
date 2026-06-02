@@ -135,3 +135,20 @@ def test_fit_buckets_downgrade_when_not_monotone():
     assert n < 5
     wins = [s["train_win"] for s in stats]
     assert all(wins[i] <= wins[i + 1] + 1e-9 for i in range(len(wins) - 1))
+
+
+def test_eval_buckets_oos_winrate_and_bigrise():
+    # 2 档：低分档 win=0、大涨=0；高分档 win=1、大涨=1
+    oos = [(0.0, 0, 0)] * 100 + [(5.0, 1, 1)] * 100
+    cuts = [2.5]
+    out = sc.eval_buckets(oos, cuts)
+    assert out[0]["star"] == 1 and out[0]["n"] == 100
+    assert abs(out[0]["oos_win"] - 0.0) < 1e-9
+    assert out[1]["star"] == 2 and abs(out[1]["oos_win"] - 1.0) < 1e-9
+    assert abs(out[1]["oos_bigrise"] - 1.0) < 1e-9
+
+
+def test_eval_buckets_empty_bucket_none():
+    oos = [(0.0, 0, 0)] * 50    # 全落最低档，高档为空
+    out = sc.eval_buckets(oos, [2.5])
+    assert out[1]["n"] == 0 and out[1]["oos_win"] is None
