@@ -46,3 +46,24 @@ def test__f_edge_cases():
     # 'nan'/'inf' 是合法浮点字面量，按设计透传(不返回 default)
     import math
     assert math.isnan(sc._f("nan"))
+
+
+def test_bin_volratio():
+    assert sc.bin_volratio("0.9") == 0
+    assert sc.bin_volratio("1.5") == 1
+    assert sc.bin_volratio("2.3") == 2
+
+
+def test_bin_relstr_lower_is_better():
+    # 相对强弱越低(越超跌)档位越高
+    assert sc.bin_relstr("-6") == 2
+    assert sc.bin_relstr("-3") == 1
+    assert sc.bin_relstr("-0.5") == 0
+
+
+def test_feature_values_keys_and_levels():
+    row = {"极限抄底": "1", "中枢极限底": "0", "中枢底部回升": "1",
+           "量比": "1.5", "相对强弱": "-6"}
+    fv = sc.feature_values(row)
+    assert fv == {"极限抄底": 1.0, "中枢极限底": 0.0, "中枢底部回升": 1.0,
+                  "量比": 1, "相对强弱": 2}

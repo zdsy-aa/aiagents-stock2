@@ -45,3 +45,26 @@ def reconstruct_tier(row):
     if is_trap(row):
         return None
     return "核心" if _f(row.get("量能金叉")) == 1 else "精选"
+
+
+def bin_volratio(x):
+    """量比分箱：>=2 →2，>=1.3 →1，否则 0（与 daily_watchlist 的 1.3 阈值一致）。"""
+    v = _f(x)
+    return 2 if v >= 2 else (1 if v >= 1.3 else 0)
+
+
+def bin_relstr(x):
+    """相对强弱分箱(越低越超跌、档位越高；非陷阱已保证 <0)：<=-5 →2，<=-2 →1，否则 0。"""
+    v = _f(x)
+    return 2 if v <= -5 else (1 if v <= -2 else 0)
+
+
+CONT_FEATS = {"量比": bin_volratio, "相对强弱": bin_relstr}
+
+
+def feature_values(row):
+    """该信号每个打分特征的档位值（binary 0/1；连续 0/1/2）。"""
+    fv = {k: _f(row.get(k)) for k in BINARY_FEATS}
+    for k, fn in CONT_FEATS.items():
+        fv[k] = fn(row.get(k))
+    return fv
