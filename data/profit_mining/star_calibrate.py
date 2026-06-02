@@ -19,6 +19,10 @@ TRAIN_END = "2023-12-31"
 OOS_START, OOS_END = "2024-01-01", "2025-10-31"
 MIN_BUCKET_N = 200
 MAX_STARS = 5
+# 每层最终星档数：训练段先挑出单调的最大档(fit_buckets)，再诚实降到此目标。
+# 核心层 5★ 样本外验证良好；精选层低星样本外不单调，故诚实降为 2 档
+# (顶分位作精英档·样本外≈81%，其余合并·≈72-75%)，星级仍代表样本外验证过的胜率差。
+TIER_STARS = {"核心": 5, "精选": 2}
 
 BINARY_FEATS = ["极限抄底", "中枢极限底", "中枢底部回升"]
 
@@ -136,6 +140,14 @@ def fit_buckets(scored, max_stars=MAX_STARS, min_n=MIN_BUCKET_N):
     return 1, [], [{"star": 1, "n": n, "train_win": wr0}]
 
 
+def collapse_cuts(cuts, target):
+    """诚实降档：把多分位切点降为 target 档，保留最高 target-1 个切点
+    (顶分位作精英档、其余合并为基础档；只动档数、不偷看样本外重挑)。"""
+    if target <= 1:
+        return []
+    return cuts[-(target - 1):]
+
+
 def eval_buckets(scored, cuts):
     """样本外评估：返回各档 n / oos_win(>=4%) / oos_bigrise(>=10%)。空档为 None。"""
     buckets = _bucketize(scored, cuts)
@@ -192,22 +204,30 @@ def calibrate(rows):
             [{"fv": r["fv"], "win": r["win"]} for r in train], feat_names)
         tr_scored = sorted(
             (score_row(r["fv"], weights), r["win"], r["bigwin"]) for r in train)
-        n_stars, cuts, train_stats = fit_buckets(tr_scored)
+        n_stars, cuts, _ = fit_buckets(tr_scored)
+        # 诚实降档到该层最终星档数(保留顶分位精英档)
+        target = min(TIER_STARS.get(tier, n_stars), n_stars)
+        final_cuts = collapse_cuts(cuts, target)
         oos_scored = [(score_row(r["fv"], weights), r["win"], r["bigwin"])
                       for r in oos]
-        oos_stats = eval_buckets(oos_scored, cuts)
-        # 合并训练/样本外档位统计
-        by_star = {s["star"]: dict(s) for s in train_stats}
-        for o in oos_stats:
-            if o["star"] in by_star:
-                by_star[o["star"]].update(
-                    oos_n=o["n"], oos_win=o["oos_win"], oos_bigrise=o["oos_bigrise"])
+        # 用最终切点重算训练/样本外各档统计
+        tr_buckets = _bucketize(tr_scored, final_cuts)
+        oos_stats = eval_buckets(oos_scored, final_cuts)
+        stars = []
+        for i, tb in enumerate(tr_buckets):
+            nb = len(tb)
+            o = oos_stats[i]
+            stars.append({
+                "star": i + 1, "n": nb,
+                "train_win": (sum(w for _, w, _ in tb) / nb) if nb else None,
+                "oos_n": o["n"], "oos_win": o["oos_win"], "oos_bigrise": o["oos_bigrise"],
+            })
         result[tier] = {
-            "n_stars": n_stars,
+            "n_stars": len(final_cuts) + 1,
             "weights": {k: round(v, 4) for k, v in weights.items()},
-            "cuts": [round(c, 4) for c in cuts],
+            "cuts": [round(c, 4) for c in final_cuts],
             "train_n": len(train), "oos_n": len(oos),
-            "stars": [by_star[s] for s in sorted(by_star)],
+            "stars": stars,
         }
     return result
 
@@ -226,9 +246,10 @@ def write_report(result, ts):
               "|---|---|---|---|---|---|"]
         for s in d["stars"]:
             star = "★" * s["star"]
+            tw = f"{s.get('train_win'):.1%}" if s.get("train_win") is not None else "—"
             ow = f"{s.get('oos_win'):.1%}" if s.get("oos_win") is not None else "—"
             ob = f"{s.get('oos_bigrise'):.1%}" if s.get("oos_bigrise") is not None else "—"
-            L.append(f"| {star} | {s['n']} | {s['train_win']:.1%} | "
+            L.append(f"| {star} | {s['n']} | {tw} | "
                      f"{s.get('oos_n', 0)} | {ow} | {ob} |")
         L.append("")
     with open(path, "w", encoding="utf-8") as f:
