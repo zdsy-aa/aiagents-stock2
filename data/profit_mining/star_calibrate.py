@@ -87,3 +87,50 @@ def fit_weights(rows, feat_names):
 def score_row(fv, weights):
     """合成分 = Σ 权重·档位值。"""
     return sum(weights.get(f, 0.0) * lvl for f, lvl in fv.items())
+
+
+def assign_bucket(score, cuts):
+    """按升序切点 cuts 返回档号 0..len(cuts)。score>=cuts[i] 则进更高档。"""
+    b = 0
+    for c in cuts:
+        if score >= c:
+            b += 1
+        else:
+            break
+    return b
+
+
+def _equal_freq_cuts(scored, k):
+    """对已按 score 升序排好的 scored 取 k 等频切点(长度 k-1)。"""
+    n = len(scored)
+    return [scored[int(round(n * i / k))][0] for i in range(1, k)]
+
+
+def _bucketize(scored, cuts):
+    """按 cuts 把 scored 分进 len(cuts)+1 个桶(0=最低分..末=最高分)。"""
+    buckets = [[] for _ in range(len(cuts) + 1)]
+    for row in scored:
+        buckets[assign_bucket(row[0], cuts)].append(row)
+    return buckets
+
+
+def fit_buckets(scored, max_stars=MAX_STARS, min_n=MIN_BUCKET_N):
+    """scored: [(score, win, bigwin)] 按 score 升序。
+    从 max_stars 往下试，找"每档>=min_n 且 训练胜率单调不降"的最大档数。
+    返回 (n_stars, cuts, stats)；stats[i]={"star":i+1,"n":..,"train_win":..}。
+    桶号低=分低=低星，故 star = 桶号+1。"""
+    n = len(scored)
+    for k in range(max_stars, 1, -1):
+        if n < min_n * k:
+            continue
+        cuts = _equal_freq_cuts(scored, k)
+        buckets = _bucketize(scored, cuts)
+        if any(len(b) < min_n for b in buckets):
+            continue
+        wr = [sum(w for _, w, _ in b) / len(b) for b in buckets]
+        if all(wr[i] <= wr[i + 1] + 1e-9 for i in range(len(wr) - 1)):
+            stats = [{"star": i + 1, "n": len(b), "train_win": wr[i]}
+                     for i, b in enumerate(buckets)]
+            return k, cuts, stats
+    wr0 = sum(w for _, w, _ in scored) / max(n, 1)
+    return 1, [], [{"star": 1, "n": n, "train_win": wr0}]

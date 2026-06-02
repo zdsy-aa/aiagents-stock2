@@ -90,3 +90,48 @@ def test_score_row_weighted_sum():
     w = {"极限抄底": 0.2, "量比": 0.1}
     fv = {"极限抄底": 1.0, "量比": 2}
     assert abs(sc.score_row(fv, w) - (0.2 * 1.0 + 0.1 * 2)) < 1e-9
+
+
+def test_assign_bucket_by_cuts():
+    # cuts=[10,20] → score<10:档0, 10<=score<20:档1, >=20:档2
+    assert sc.assign_bucket(5, [10, 20]) == 0
+    assert sc.assign_bucket(10, [10, 20]) == 1
+    assert sc.assign_bucket(25, [10, 20]) == 2
+
+
+def test_fit_buckets_clean_5_monotone():
+    # 构造分数与胜率严格单调的数据 → 应分满 5 档
+    scored = []
+    for star in range(5):              # star 0..4 → 胜率 0.2..0.6
+        wr = 0.2 + 0.1 * star
+        for j in range(300):
+            win = 1 if j < int(300 * wr) else 0
+            scored.append((float(star), win, 0))
+    scored.sort(key=lambda x: x[0])
+    n, cuts, stats = sc.fit_buckets(scored, max_stars=5, min_n=200)
+    assert n == 5
+    wins = [s["train_win"] for s in stats]
+    assert all(wins[i] <= wins[i + 1] + 1e-9 for i in range(4))
+
+
+def test_fit_buckets_honest_downgrade_on_small_sample():
+    # 仅 300 样本、min_n=200 → 最多 1 档(2 档需 400)
+    scored = [(float(i), i % 2, 0) for i in range(300)]
+    scored.sort(key=lambda x: x[0])
+    n, cuts, stats = sc.fit_buckets(scored, max_stars=5, min_n=200)
+    assert n == 1
+    assert cuts == []
+
+
+def test_fit_buckets_downgrade_when_not_monotone():
+    # 5 档会非单调，但合并到 2 档单调 → 应降到能单调的最大档数(<5)
+    scored = []
+    pattern = [0.5, 0.1, 0.5, 0.1, 0.6]   # 5 等频段胜率(非单调)
+    for seg, wr in enumerate(pattern):
+        for j in range(300):
+            scored.append((float(seg), 1 if j < int(300 * wr) else 0, 0))
+    scored.sort(key=lambda x: x[0])
+    n, cuts, stats = sc.fit_buckets(scored, max_stars=5, min_n=200)
+    assert n < 5
+    wins = [s["train_win"] for s in stats]
+    assert all(wins[i] <= wins[i + 1] + 1e-9 for i in range(len(wins) - 1))
