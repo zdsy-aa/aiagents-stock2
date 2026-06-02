@@ -171,3 +171,17 @@ def test_split_train_oos():
     train, oos = sc.split_train_oos(rows)
     assert [r["date"] for r in train] == ["2022-05-01"]
     assert [r["date"] for r in oos] == ["2024-06-01"]   # 2025-12/2026 在 OOS 窗外被排除
+
+
+def test_collapse_cuts():
+    cuts = [0.1, 0.2, 0.3, 0.4]   # 5 分位(4 切点)
+    # 降为 2 档 → 只保留最高 1 个切点(顶分位 vs 其余)
+    assert sc.collapse_cuts(cuts, 2) == [0.4]
+    # 降为 3 档 → 保留最高 2 个切点
+    assert sc.collapse_cuts(cuts, 3) == [0.3, 0.4]
+    # target>=档数 → 全保留(不降)
+    assert sc.collapse_cuts(cuts, 5) == [0.1, 0.2, 0.3, 0.4]
+    # 1 档 → 无切点
+    assert sc.collapse_cuts(cuts, 1) == []
+    # 空切点(已是1档) → 仍空
+    assert sc.collapse_cuts([], 2) == []
