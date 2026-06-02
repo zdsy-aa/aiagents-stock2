@@ -24,7 +24,7 @@ BINARY_FEATS = ["极限抄底", "中枢极限底", "中枢底部回升"]
 
 
 def _f(v, default=0.0):
-    """宽松转 float：空串/None/非数 → default。"""
+    """宽松转 float：空串/None/非数字字符串 → default；'nan'/'inf' 视为合法浮点透传。"""
     try:
         return float(v)
     except (TypeError, ValueError):
@@ -32,12 +32,14 @@ def _f(v, default=0.0):
 
 
 def is_trap(row):
-    """陷阱(精选层失效)：大盘多头 或 相对强弱>=0。复刻 daily_watchlist 的 trap 判定。"""
-    return _f(row.get("大盘多头")) == 1 or _f(row.get("相对强弱")) >= 0
+    """陷阱(精选层失效)：大盘多头 或 相对强弱>=0。复刻 daily_watchlist 的 trap 判定。
+    相对强弱 缺失/空 → NaN（nan>=0 为 False，与 daily_watchlist 的 pd.notna 守卫一致），不判陷阱。"""
+    return _f(row.get("大盘多头")) == 1 or _f(row.get("相对强弱"), default=float("nan")) >= 0
 
 
 def reconstruct_tier(row):
-    """复刻 daily_watchlist 层级：仅1买生效；陷阱→None；量能金叉→核心，否则精选。"""
+    """复刻 daily_watchlist 层级：仅1买生效；陷阱→None；量能金叉→核心，否则精选。
+    返回裸标签 '核心'/'精选'（不含★，供统计分组；展示用的★标签在 daily_watchlist）。"""
     if row.get("买点类型") != "1买":
         return None
     if is_trap(row):
