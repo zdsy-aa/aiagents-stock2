@@ -67,3 +67,26 @@ def test_feature_values_keys_and_levels():
     fv = sc.feature_values(row)
     assert fv == {"极限抄底": 1.0, "中枢极限底": 0.0, "中枢底部回升": 1.0,
                   "量比": 1, "相对强弱": 2}
+
+
+def test_fit_weights_positive_signal():
+    # 极限抄底=1 全胜、=0 全负 → 权重应为正且约等于 1.0
+    rows = []
+    for _ in range(50):
+        rows.append({"fv": {"极限抄底": 1.0}, "win": 1})
+        rows.append({"fv": {"极限抄底": 0.0}, "win": 0})
+    w = sc.fit_weights(rows, ["极限抄底"])
+    assert w["极限抄底"] > 0.9
+
+
+def test_fit_weights_no_signal_zero_weight():
+    # 特征恒为0 → 无对照组 → 权重 0
+    rows = [{"fv": {"极限抄底": 0.0}, "win": 1} for _ in range(20)]
+    w = sc.fit_weights(rows, ["极限抄底"])
+    assert w["极限抄底"] == 0.0
+
+
+def test_score_row_weighted_sum():
+    w = {"极限抄底": 0.2, "量比": 0.1}
+    fv = {"极限抄底": 1.0, "量比": 2}
+    assert abs(sc.score_row(fv, w) - (0.2 * 1.0 + 0.1 * 2)) < 1e-9

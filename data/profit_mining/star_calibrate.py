@@ -68,3 +68,22 @@ def feature_values(row):
     for k, fn in CONT_FEATS.items():
         fv[k] = fn(row.get(k))
     return fv
+
+
+def fit_weights(rows, feat_names):
+    """rows: [{"fv": {feat: level}, "win": 0/1}]。
+    权重 = mean(win | level>0) − mean(win | level==0)。无对照组则 0。"""
+    weights = {}
+    for f in feat_names:
+        on = [r["win"] for r in rows if r["fv"].get(f, 0) > 0]
+        off = [r["win"] for r in rows if r["fv"].get(f, 0) == 0]
+        if not on or not off:
+            weights[f] = 0.0
+        else:
+            weights[f] = sum(on) / len(on) - sum(off) / len(off)
+    return weights
+
+
+def score_row(fv, weights):
+    """合成分 = Σ 权重·档位值。"""
+    return sum(weights.get(f, 0.0) * lvl for f, lvl in fv.items())
