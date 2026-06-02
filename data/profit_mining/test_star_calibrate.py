@@ -35,3 +35,14 @@ def test_reconstruct_tier_none_when_not_first_buy():
 def test_reconstruct_tier_none_when_trap():
     row = {"买点类型": "1买", "大盘多头": "1", "相对强弱": "-4", "量能金叉": "1"}
     assert sc.reconstruct_tier(row) is None
+
+
+def test__f_edge_cases():
+    assert sc._f("") == 0.0
+    assert sc._f(None) == 0.0
+    assert sc._f("abc") == 0.0
+    assert sc._f("3.5") == 3.5
+    assert sc._f("", default=-1.0) == -1.0
+    # 'nan'/'inf' 是合法浮点字面量，按设计透传(不返回 default)
+    import math
+    assert math.isnan(sc._f("nan"))
