@@ -149,3 +149,110 @@ def eval_buckets(scored, cuts):
             "oos_bigrise": (sum(g for _, _, g in b) / nb) if nb else None,
         })
     return out
+
+
+def parse_signal_row(raw):
+    """把 signal_features.csv 一行解析成标定用记录。非1买/陷阱 → tier=None(后续跳过)。"""
+    chg = _f(raw.get("区间涨跌幅"))
+    return {
+        "tier": reconstruct_tier(raw),
+        "date": raw.get("信号日期", ""),
+        "fv": feature_values(raw),
+        "win": 1 if chg >= WIN_THRESH else 0,
+        "bigwin": 1 if chg >= BIGRISE_THRESH else 0,
+    }
+
+
+def split_train_oos(rows):
+    """按信号日期切：训练 <=TRAIN_END；样本外 OOS_START..OOS_END(排除标签截断的近端)。"""
+    train = [r for r in rows if r["date"] <= TRAIN_END]
+    oos = [r for r in rows if OOS_START <= r["date"] <= OOS_END]
+    return train, oos
+
+
+def load_rows(path=FEATURES):
+    """读 signal_features.csv → 解析后、仅保留 tier 非空(核心/精选)的记录。"""
+    out = []
+    with open(path, encoding="utf-8-sig") as f:
+        for raw in csv.DictReader(f):
+            p = parse_signal_row(raw)
+            if p["tier"]:
+                out.append(p)
+    return out
+
+
+def calibrate(rows):
+    """对核心/精选两层分别：训练定权重→打分→分档→样本外评估。返回结构化结果。"""
+    feat_names = BINARY_FEATS + list(CONT_FEATS)
+    result = {}
+    for tier in ("核心", "精选"):
+        trows = [r for r in rows if r["tier"] == tier]
+        train, oos = split_train_oos(trows)
+        weights = fit_weights(
+            [{"fv": r["fv"], "win": r["win"]} for r in train], feat_names)
+        tr_scored = sorted(
+            (score_row(r["fv"], weights), r["win"], r["bigwin"]) for r in train)
+        n_stars, cuts, train_stats = fit_buckets(tr_scored)
+        oos_scored = [(score_row(r["fv"], weights), r["win"], r["bigwin"])
+                      for r in oos]
+        oos_stats = eval_buckets(oos_scored, cuts)
+        # 合并训练/样本外档位统计
+        by_star = {s["star"]: dict(s) for s in train_stats}
+        for o in oos_stats:
+            if o["star"] in by_star:
+                by_star[o["star"]].update(
+                    oos_n=o["n"], oos_win=o["oos_win"], oos_bigrise=o["oos_bigrise"])
+        result[tier] = {
+            "n_stars": n_stars,
+            "weights": {k: round(v, 4) for k, v in weights.items()},
+            "cuts": [round(c, 4) for c in cuts],
+            "train_n": len(train), "oos_n": len(oos),
+            "stars": [by_star[s] for s in sorted(by_star)],
+        }
+    return result
+
+
+def write_report(result, ts):
+    """人读 markdown 报告 → REPORT_DIR/star_calibration_report_<ts>.md。"""
+    os.makedirs(REPORT_DIR, exist_ok=True)
+    path = os.path.join(REPORT_DIR, f"star_calibration_report_{ts}.md")
+    L = [f"# 核心/精选层星级标定报告 {ts}", "",
+         f"- 主口径 ≥{WIN_THRESH}% / 辅口径 ≥{BIGRISE_THRESH}%",
+         f"- 训练段 ≤{TRAIN_END}；样本外 {OOS_START}~{OOS_END}（排除标签截断的近端）", ""]
+    for tier, d in result.items():
+        L += [f"## {tier}层（实际 {d['n_stars']} 档，训练 {d['train_n']} / 样本外 {d['oos_n']}）",
+              f"权重：{d['weights']}", "",
+              "| 星级 | 训练样本 | 训练胜率 | 样本外样本 | 样本外胜率(≥4%) | 样本外大涨率(≥10%) |",
+              "|---|---|---|---|---|---|"]
+        for s in d["stars"]:
+            star = "★" * s["star"]
+            ow = f"{s.get('oos_win'):.1%}" if s.get("oos_win") is not None else "—"
+            ob = f"{s.get('oos_bigrise'):.1%}" if s.get("oos_bigrise") is not None else "—"
+            L.append(f"| {star} | {s['n']} | {s['train_win']:.1%} | "
+                     f"{s.get('oos_n', 0)} | {ow} | {ob} |")
+        L.append("")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(L))
+    return path
+
+
+def main():
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    rows = load_rows()
+    result = calibrate(rows)
+    payload = {
+        "generated": ts, "win_thresh": WIN_THRESH, "bigrise_thresh": BIGRISE_THRESH,
+        "train_end": TRAIN_END, "oos": [OOS_START, OOS_END],
+        "binary_feats": BINARY_FEATS, "cont_feats": list(CONT_FEATS),
+        "tiers": result,
+    }
+    with open(THRESH_OUT, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    rp = write_report(result, ts)
+    for tier, d in result.items():
+        print(f"[星级标定] {tier}层 {d['n_stars']}档 训练{d['train_n']}/样本外{d['oos_n']}")
+    print(f"[星级标定] 阈值 → {THRESH_OUT}；报告 → {rp}")
+
+
+if __name__ == "__main__":
+    main()

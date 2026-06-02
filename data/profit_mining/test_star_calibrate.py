@@ -152,3 +152,22 @@ def test_eval_buckets_empty_bucket_none():
     oos = [(0.0, 0, 0)] * 50    # 全落最低档，高档为空
     out = sc.eval_buckets(oos, [2.5])
     assert out[1]["n"] == 0 and out[1]["oos_win"] is None
+
+
+def test_parse_signal_row():
+    raw = {"买点类型": "1买", "信号日期": "2024-03-01", "区间涨跌幅": "7.5",
+           "极限抄底": "1", "中枢极限底": "0", "中枢底部回升": "0",
+           "量比": "1.5", "相对强弱": "-6", "量能金叉": "1", "大盘多头": "0"}
+    p = sc.parse_signal_row(raw)
+    assert p["tier"] == "核心"
+    assert p["win"] == 1          # 7.5 >= 4
+    assert p["bigwin"] == 0       # 7.5 < 10
+    assert p["date"] == "2024-03-01"
+
+
+def test_split_train_oos():
+    rows = [{"date": "2022-05-01"}, {"date": "2024-06-01"},
+            {"date": "2025-12-01"}, {"date": "2026-01-01"}]
+    train, oos = sc.split_train_oos(rows)
+    assert [r["date"] for r in train] == ["2022-05-01"]
+    assert [r["date"] for r in oos] == ["2024-06-01"]   # 2025-12/2026 在 OOS 窗外被排除
