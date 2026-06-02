@@ -185,3 +185,40 @@ def test_collapse_cuts():
     assert sc.collapse_cuts(cuts, 1) == []
     # 空切点(已是1档) → 仍空
     assert sc.collapse_cuts([], 2) == []
+
+
+def _fake_thresholds():
+    # 核心5档(cuts 4个)、精选2档(cut 1个)的简化阈值，权重让"极限抄底"主导分数
+    return {"tiers": {
+        "核心": {"n_stars": 5, "weights": {"极限抄底": 1.0, "量比": 0.1},
+                 "cuts": [0.05, 0.15, 0.5, 0.9],
+                 "stars": [{"star": i + 1, "oos_win": 0.6 + 0.05 * i,
+                            "oos_bigrise": 0.4 + 0.05 * i} for i in range(5)]},
+        "精选": {"n_stars": 2, "weights": {"极限抄底": 1.0},
+                 "cuts": [0.5],
+                 "stars": [{"star": 1, "oos_win": 0.73, "oos_bigrise": 0.6},
+                           {"star": 2, "oos_win": 0.81, "oos_bigrise": 0.71}]}}}
+
+
+def test_assign_star_core_high_and_low():
+    th = _fake_thresholds()
+    # 极限抄底=1,量比≥2(档2) → 分=1.0+0.1*2=1.2 ≥0.9 → 顶档 5★
+    hi = {"极限抄底": "1", "中枢极限底": "0", "中枢底部回升": "0", "量比": "2.5", "相对强弱": "-1"}
+    star, ew, br, n = sc.assign_star("核心", hi, th)
+    assert star == 5 and n == 5 and abs(ew - 0.8) < 1e-9
+    # 全0特征 → 分=0 <0.05 → 1★
+    lo = {"极限抄底": "0", "中枢极限底": "0", "中枢底部回升": "0", "量比": "0.5", "相对强弱": "-1"}
+    star2, ew2, _, _ = sc.assign_star("核心", lo, th)
+    assert star2 == 1 and abs(ew2 - 0.6) < 1e-9
+
+
+def test_assign_star_refined_two_bands():
+    th = _fake_thresholds()
+    # 精选: 极限抄底=1 → 分=1.0 ≥0.5 → ★★(顶档)
+    top = {"极限抄底": "1", "中枢极限底": "0", "中枢底部回升": "0", "量比": "0.5", "相对强弱": "-1"}
+    star, ew, br, n = sc.assign_star("精选", top, th)
+    assert star == 2 and n == 2 and abs(ew - 0.81) < 1e-9
+    # 极限抄底=0 → 分=0 <0.5 → ★(基础档)
+    base = {"极限抄底": "0", "中枢极限底": "0", "中枢底部回升": "0", "量比": "0.5", "相对强弱": "-1"}
+    star2, ew2, _, _ = sc.assign_star("精选", base, th)
+    assert star2 == 1 and abs(ew2 - 0.73) < 1e-9

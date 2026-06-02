@@ -163,6 +163,23 @@ def eval_buckets(scored, cuts):
     return out
 
 
+def load_thresholds(path=THRESH_OUT):
+    """读阶段一固化的星级阈值 json。"""
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def assign_star(tier, row, thresholds):
+    """服务端打星：给一只 tier='核心'/'精选' 候选(row=含打分特征列的 dict)打星。
+    复用训练同一套 feature_values/score_row/分位切点，保证口径一致(无漂移)。
+    返回 (star:int 1..n, est_win:float|None, bigrise:float|None, n_stars:int)。"""
+    td = thresholds["tiers"][tier]
+    fv = feature_values(row)
+    b = assign_bucket(score_row(fv, td["weights"]), td["cuts"])
+    st = td["stars"][b]
+    return b + 1, st.get("oos_win"), st.get("oos_bigrise"), td["n_stars"]
+
+
 def parse_signal_row(raw):
     """把 signal_features.csv 一行解析成标定用记录。非1买/陷阱 → tier=None(后续跳过)。"""
     chg = _f(raw.get("区间涨跌幅"))
