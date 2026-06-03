@@ -133,15 +133,31 @@ class SectorStrategyDataFetcher:
         return data
     
     def _get_sector_performance(self):
-        """获取行业板块表现"""
+        """获取行业板块表现（同花顺源优先，避开东财反爬；东财兜底）"""
         try:
-            # 获取行业板块实时行情（使用重试机制）
+            # 主源：同花顺行业资金流（含 行业/涨跌幅/领涨股/净额，走 10jqka 不碰东财 push2）
+            df = self._safe_request(ak.stock_fund_flow_industry, symbol="即时")
+            if df is not None and not df.empty and '行业' in df.columns:
+                sectors = {}
+                for row in df.to_dict('records'):
+                    name = row.get('行业', '')
+                    if name:
+                        sectors[name] = {
+                            "name": name,
+                            "change_pct": row.get('行业-涨跌幅', 0),
+                            "turnover": 0,            # 同花顺该接口无换手率
+                            "total_market_cap": 0,    # 同花顺该接口无总市值
+                            "top_stock": row.get('领涨股', ''),
+                            "top_stock_change": row.get('领涨股-涨跌幅', 0),
+                            "up_count": 0,            # 同花顺该接口无涨跌家数
+                            "down_count": 0
+                        }
+                return sectors
+
+            # 兜底：东财行业板块（当前受反爬，多半失败）
             df = self._safe_request(ak.stock_board_industry_name_em)
-            
             if df is None or df.empty:
                 return {}
-            
-            # 转换为字典格式
             sectors = {}
             for row in df.to_dict('records'):  # to_dict 比 iterrows 快 ~10-30x，语义等价
                 sector_name = row.get('板块名称', '')
@@ -156,23 +172,38 @@ class SectorStrategyDataFetcher:
                         "up_count": row.get('上涨家数', 0),
                         "down_count": row.get('下跌家数', 0)
                     }
-            
             return sectors
-            
+
         except Exception as e:
             logger.error(f"    获取行业板块数据失败: {e}")
             return {}
     
     def _get_concept_performance(self):
-        """获取概念板块表现"""
+        """获取概念板块表现（同花顺源优先，避开东财反爬；东财兜底）"""
         try:
-            # 获取概念板块实时行情（使用重试机制）
+            # 主源：同花顺概念资金流（含 概念名/涨跌幅/领涨股/净额，列名沿用「行业」）
+            df = self._safe_request(ak.stock_fund_flow_concept, symbol="即时")
+            if df is not None and not df.empty and '行业' in df.columns:
+                concepts = {}
+                for row in df.to_dict('records'):
+                    name = row.get('行业', '')
+                    if name:
+                        concepts[name] = {
+                            "name": name,
+                            "change_pct": row.get('行业-涨跌幅', 0),
+                            "turnover": 0,
+                            "total_market_cap": 0,
+                            "top_stock": row.get('领涨股', ''),
+                            "top_stock_change": row.get('领涨股-涨跌幅', 0),
+                            "up_count": 0,
+                            "down_count": 0
+                        }
+                return concepts
+
+            # 兜底：东财概念板块（当前受反爬，多半失败）
             df = self._safe_request(ak.stock_board_concept_name_em)
-            
             if df is None or df.empty:
                 return {}
-            
-            # 转换为字典格式
             concepts = {}
             for row in df.to_dict('records'):  # to_dict 比 iterrows 快 ~10-30x，语义等价
                 concept_name = row.get('板块名称', '')
@@ -187,28 +218,42 @@ class SectorStrategyDataFetcher:
                         "up_count": row.get('上涨家数', 0),
                         "down_count": row.get('下跌家数', 0)
                     }
-            
             return concepts
-            
+
         except Exception as e:
             logger.error(f"    获取概念板块数据失败: {e}")
             return {}
     
     def _get_sector_fund_flow(self):
-        """获取行业资金流向"""
+        """获取行业资金流向（同花顺源优先，避开东财反爬；东财兜底）"""
         try:
-            # 获取行业资金流向（使用重试机制）
-            df = self._safe_request(ak.stock_sector_fund_flow_rank, indicator="今日")
-            
-            if df is None or df.empty:
-                return {}
-            
-            # 转换为字典格式
             fund_flow = {
                 "today": [],
                 "update_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
-            
+
+            # 主源：同花顺行业资金流（净额单位「亿」，×10000 转「万」对齐下游展示）
+            df = self._safe_request(ak.stock_fund_flow_industry, symbol="即时")
+            if df is not None and not df.empty and '行业' in df.columns:
+                df = df.sort_values('净额', ascending=False) if '净额' in df.columns else df
+                for row in df.head(50).to_dict('records'):
+                    net = row.get('净额', 0) or 0
+                    fund_flow["today"].append({
+                        "sector": row.get('行业', ''),
+                        "main_net_inflow": net * 10000,          # 亿 → 万
+                        "main_net_inflow_pct": 0,                # 同花顺该接口无净占比
+                        "super_large_net_inflow": 0,            # 同花顺该接口无单类细分
+                        "large_net_inflow": 0,
+                        "medium_net_inflow": 0,
+                        "small_net_inflow": 0,
+                        "change_pct": row.get('行业-涨跌幅', 0)
+                    })
+                return fund_flow
+
+            # 兜底：东财行业资金流（当前受反爬，多半失败）
+            df = self._safe_request(ak.stock_sector_fund_flow_rank, indicator="今日")
+            if df is None or df.empty:
+                return {}
             for idx, row in df.head(50).iterrows():  # 取前50个
                 fund_flow["today"].append({
                     "sector": row.get('名称', ''),
@@ -220,9 +265,9 @@ class SectorStrategyDataFetcher:
                     "small_net_inflow": row.get('今日小单净流入-净额', 0),
                     "change_pct": row.get('今日涨跌幅', 0)
                 })
-            
+
             return fund_flow
-            
+
         except Exception as e:
             logger.error(f"    获取行业资金流向失败: {e}")
             return {}
