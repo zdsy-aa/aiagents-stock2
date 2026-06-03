@@ -125,10 +125,17 @@ def display_stable_selector():
     df, msg = _selected_by_date(scan_date)
     st.info(msg)
     if df is not None and len(df):
-        # 星级列前置（更醒目）：核心5★/精选2★，已按层主键+层内星数倒序排好
+        # 可入状态：旧记录无此列则补“—”（历史 CSV 不回填）
+        if "可入状态" not in df.columns:
+            df["可入状态"] = "—"
+        # 前置列（更醒目）：可入状态 + 星级/预估胜率/大涨率。整体已按层主键+层内星数倒序排好
+        front = [c for c in ["可入状态", "星级", "预估胜率", "大涨率"] if c in df.columns]
+        df = df[front + [c for c in df.columns if c not in front]]
+        st.caption("🟢 **可入状态=在该扫描日，这条信号是否仍可按原计划进场**（以扫描日收盘价判定，"
+                   "价格类优先于窗口类）：**可入**=信号日起≤1交易日且价格仍在区间(最纯)；**尾窗**=第2个交易日(±2，精度略降)；"
+                   "**已过窗**=超过2交易日；**已涨过**=收盘较买入价高出>5%(追高，性价比差)；"
+                   "**已破止损**=收盘跌破止损价；**已止盈**=收盘已达止盈价；**—**=旧记录未记此列。")
         if "星级" in df.columns:
-            front = [c for c in ["星级", "预估胜率", "大涨率"] if c in df.columns]
-            df = df[front + [c for c in df.columns if c not in front]]
             st.caption("⭐ **星级=经样本外(2024~2025.10)验证的上涨概率分档**，越多星该层内越易涨（"
                        "核心5★：★≈68%→★★★★★≈85%；精选2★：★≈73%/★★≈81%，主口径30日内涨幅≥4%）。"
                        "“预估胜率/大涨率”为该档样本外胜率(≥4%)/大涨率(≥10%)，是历史验证值、非未来保证。")
