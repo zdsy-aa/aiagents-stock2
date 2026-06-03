@@ -583,16 +583,20 @@ class MarketSentimentDataFetcher:
                 pass
             
             # 方法2：获取融资融券汇总数据
+            # 注：akshare 已移除 stock_margin_szsh，改用上交所融资融券汇总 stock_margin_sse
+            #     （15 天窗口取最新一行，自动跳过非交易日；融券口径用「融券余量金额」）
             try:
-                df = ak.stock_margin_szsh()
+                _end = datetime.now().strftime('%Y%m%d')
+                _start = (datetime.now() - timedelta(days=15)).strftime('%Y%m%d')
+                df = ak.stock_margin_sse(start_date=_start, end_date=_end)
                 if df is not None and not df.empty:
                     # 获取最新数据
                     latest = df.iloc[-1]
                     return {
                         "margin_balance": latest.get('融资余额', 'N/A'),
-                        "short_balance": latest.get('融券余额', 'N/A'),
-                        "interpretation": ["市场整体融资融券数据"],
-                        "date": latest.get('交易日期', 'N/A')
+                        "short_balance": latest.get('融券余量金额', 'N/A'),
+                        "interpretation": ["市场整体融资融券数据（上交所汇总）"],
+                        "date": str(latest.get('信用交易日期', 'N/A'))
                     }
             except Exception:
                 pass
