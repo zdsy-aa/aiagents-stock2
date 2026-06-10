@@ -35,8 +35,44 @@ def test_inject_none_bar_passthrough():
     assert len(out) == 2
 
 
+def test_parse_spot_basic():
+    spot = pd.DataFrame({
+        "代码": ["600519", "000001", "300750"],
+        "今开": [1700.0, 11.0, 200.0],
+        "最高": [1720.0, 11.3, 205.0],
+        "最低": [1695.0, 10.9, 199.0],
+        "最新价": [1710.0, 11.2, 0.0],   # 300750 现价0 → 停牌/无效，应剔除
+        "成交量": [3.0e5, 8.0e6, 1.0e5],
+    })
+    snap = IQ._parse_spot(spot)
+    assert "600519" in snap and "000001" in snap
+    assert "300750" not in snap, "现价<=0 应剔除"
+    assert snap["600519"]["Close"] == 1710.0
+    assert snap["000001"]["High"] == 11.3
+    assert isinstance(list(snap.keys())[0], str) and len(list(snap.keys())[0]) == 6
+
+
+def test_parse_spot_empty():
+    assert IQ._parse_spot(None) == {}
+    assert IQ._parse_spot(pd.DataFrame()) == {}
+
+
+def test_quote_to_bar():
+    q = {"Code": "000001", "TotalHand": 12345,
+         "K": {"Open": 10000, "High": 10500, "Low": 9900, "Close": 10200}}
+    bar = IQ._quote_to_bar(q)
+    assert bar == {"Open": 10.0, "High": 10.5, "Low": 9.9, "Close": 10.2,
+                   "Volume": 12345.0}, bar
+    assert IQ._quote_to_bar({"K": {"Open": 0, "High": 0, "Low": 0, "Close": 0},
+                             "TotalHand": 0}) is None   # 停牌 Close<=0
+    assert IQ._quote_to_bar({"foo": 1}) is None          # 缺字段
+
+
 if __name__ == "__main__":
     test_inject_appends_new_today_row()
     test_inject_overwrites_existing_today_row()
     test_inject_none_bar_passthrough()
+    test_parse_spot_basic()
+    test_parse_spot_empty()
+    test_quote_to_bar()
     print("ALL OK")
