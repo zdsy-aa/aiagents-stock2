@@ -85,19 +85,51 @@ def _fetch_turn(bs, code, start):
         return None
 
 
+def _recent_trade_days(today, n):
+    """返回 today 及其前 n 个自然日内的日期字符串集合(粗口径窗，配合 entry_status 精判)。
+    用自然日 *2+3 兜住周末，entry_status 再按交易日 gap 精判。"""
+    t = pd.Timestamp(today)
+    return {(t - pd.Timedelta(days=k)).strftime("%Y-%m-%d") for k in range(0, n * 2 + 3)}
+
+
+def load_signals(post_db=SIGDB, intraday_db=None, today=None, window_days=2, scan_date=None):
+    """取候选买点：盘中库今日新信号 ∪ 盘后库窗内信号(signal_date 距今 ≤window_days*交易日)。
+    按 (code, signal_date) 去重，盘中库优先(后写覆盖)。返回 list[dict(code,name,board,
+    signal_type,signal_date,buy_price,scan_date)]。
+    intraday_db=None → 仅盘后(scan_date 指定批，否则 MAX(scan_date))，不做窗口过滤=旧行为。"""
+    today = today or pd.Timestamp.now().strftime("%Y-%m-%d")
+    keep = _recent_trade_days(today, window_days)
+    merged = {}
+
+    def _pull(path, only_recent, pin_scan=None):
+        c = sqlite3.connect(path); c.row_factory = sqlite3.Row
+        sd = pin_scan or c.execute("SELECT MAX(scan_date) FROM signals").fetchone()[0]
+        rs = c.execute(
+            "SELECT code,name,board,signal_type,signal_date,buy_price,scan_date FROM signals "
+            "WHERE scan_date=? AND signal_type IN ('1买','2买','3买')", (sd,)).fetchall()
+        c.close()
+        for r in rs:
+            if only_recent and r["signal_date"] not in keep:
+                continue
+            merged[(str(r["code"]).zfill(6), r["signal_date"])] = dict(r)
+
+    _pull(post_db, only_recent=intraday_db is not None, pin_scan=scan_date)
+    if intraday_db and os.path.exists(intraday_db):
+        _pull(intraday_db, only_recent=False)   # 盘中库后写=覆盖=优先
+    return list(merged.values())
+
+
 def main():
     _refresh_index()
     idx = pd.read_csv(IDXCSV, encoding="utf-8-sig"); idx["日期"] = pd.to_datetime(idx["日期"])
     idx = idx.set_index("日期").sort_index()
     ist = F.index_state(idx[["Open", "High", "Low", "Close", "Volume"]])
 
-    con = sqlite3.connect(SIGDB)
-    con.row_factory = sqlite3.Row
-    sd = sys.argv[1] if len(sys.argv) > 1 else con.execute(
-        "SELECT MAX(scan_date) FROM signals").fetchone()[0]
-    rows = con.execute(
-        "SELECT code,name,board,signal_type,signal_date,buy_price FROM signals "
-        "WHERE scan_date=? AND signal_type IN ('1买','2买','3买')", (sd,)).fetchall()
+    sd = sys.argv[1] if len(sys.argv) > 1 else None
+    rows = load_signals(scan_date=sd)
+    if sd is None:
+        sd = max((r.get("scan_date") for r in rows),
+                 default=pd.Timestamp.now().strftime("%Y-%m-%d"))
     print(f"[每日选股] scan_date={sd}，候选缠论买点 {len(rows)} 个，过滤中(含尖刺金叉筹码计算)…", flush=True)
 
     # 星级阈值(阶段一回测固化)：核心5★/精选2★。缺失则降级为不打星。
@@ -208,7 +240,9 @@ def main():
         es = entry_status(gap, close_scan, bp, stop_loss, take_profit)
         out.append({"股票代码": code, "股票名称": r["name"], "板块": r["board"],
                     "买点类型": r["signal_type"], "信号日期": r["signal_date"],
-                    "买入价": r["buy_price"], "止损价": stop_loss, "止盈价": take_profit,
+                    "买入价": r["buy_price"],
+                    "扫描日价": round(close_scan, 2) if close_scan is not None else "",
+                    "止损价": stop_loss, "止盈价": take_profit,
                     "命中规则": rule, "精选": refine,
                     "星级": star_label, "预估胜率": est_win, "大涨率": big_rise,
                     "资金确认": "✓机构净买" if zj_buy else "",
@@ -233,7 +267,7 @@ def main():
     for x in out:
         x["扫描日期"] = sd                 # 记录是哪天扫描的，供历史区分/过滤
     cols = ["扫描日期", "股票代码", "股票名称", "板块", "买点类型", "信号日期", "买入价",
-            "止损价", "止盈价",
+            "扫描日价", "止损价", "止盈价",
             "命中规则", "精选", "资金确认", "中枢底部", "量比", "获利盘%", "大盘环境", "优先级",
             "可入状态", "星级", "预估胜率", "大涨率"]
     # 1) latest（向后兼容）；2) 按扫描日期存历史(不覆盖)
