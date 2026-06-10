@@ -107,3 +107,22 @@ def fetch_market_snapshot(codes=None):
         out.update({c: sub[c] for c in missing if c in sub})
     logger.info(f"[盘中快照] 取到 {len(out)}/{len(codes)} 只实时 bar")
     return out
+
+
+def _trade_cal_dates():
+    """返回近年交易日集合(set[pd.Timestamp normalize])，取不到返回 None。"""
+    try:
+        import akshare as ak
+        df = ak.tool_trade_date_hist_sina()
+        return {pd.Timestamp(d).normalize() for d in df["trade_date"]}
+    except Exception:
+        return None
+
+
+def is_cn_trading_day(today=None):
+    """A股交易日判断：优先交易日历，失败退化为工作日(周一~周五)。"""
+    today = pd.Timestamp(today or pd.Timestamp.now()).normalize()
+    cal = _trade_cal_dates()
+    if cal is not None:
+        return today in cal
+    return today.weekday() < 5
