@@ -68,6 +68,29 @@ def test_quote_to_bar():
     assert IQ._quote_to_bar({"foo": 1}) is None          # 缺字段
 
 
+def test_trading_day_weekday_fallback(monkey=None):
+    # 交易日历不可用时：工作日→True，周末→False
+    import intraday_quote as IQ2
+    orig = IQ2._trade_cal_dates
+    IQ2._trade_cal_dates = lambda: None          # 模拟取不到日历
+    try:
+        assert IQ2.is_cn_trading_day(pd.Timestamp("2026-06-10")) is True   # 周三
+        assert IQ2.is_cn_trading_day(pd.Timestamp("2026-06-13")) is False  # 周六
+    finally:
+        IQ2._trade_cal_dates = orig
+
+
+def test_trading_day_calendar_excludes_holiday():
+    import intraday_quote as IQ2
+    orig = IQ2._trade_cal_dates
+    IQ2._trade_cal_dates = lambda: {pd.Timestamp("2026-06-10").normalize()}  # 只有10号是交易日
+    try:
+        assert IQ2.is_cn_trading_day(pd.Timestamp("2026-06-10")) is True
+        assert IQ2.is_cn_trading_day(pd.Timestamp("2026-06-11")) is False   # 不在日历→非交易日
+    finally:
+        IQ2._trade_cal_dates = orig
+
+
 if __name__ == "__main__":
     test_inject_appends_new_today_row()
     test_inject_overwrites_existing_today_row()
@@ -75,4 +98,6 @@ if __name__ == "__main__":
     test_parse_spot_basic()
     test_parse_spot_empty()
     test_quote_to_bar()
+    test_trading_day_weekday_fallback()
+    test_trading_day_calendar_excludes_holiday()
     print("ALL OK")
