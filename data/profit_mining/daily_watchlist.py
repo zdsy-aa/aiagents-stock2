@@ -36,6 +36,28 @@ def entry_status(gap, close, buy, stop, tp, premium=0.05):
     return "可入"
 
 
+_ENTERABLE = {"可入", "尾窗"}
+_GOODER = {"可入": 2, "尾窗": 1}   # 变好判定：分值升高
+
+
+def mark_changes(cur, prev):
+    """对当前行打 变化标记 列：上轮不存在=🆕新出；可入状态变好(尾窗→可入/新转可入)=⤴变动。
+    高亮(新出/变动)置顶，其余维持原顺序。prev=None(首轮)→全不打标。返回新列表。"""
+    pmap = {r["股票代码"]: r.get("可入状态", "") for r in (prev or [])}
+    for r in cur:
+        code, st = r["股票代码"], r.get("可入状态", "")
+        if prev is None:
+            r["变化标记"] = ""
+        elif code not in pmap:
+            r["变化标记"] = "🆕新出" if st in _ENTERABLE else ""
+        else:
+            up = _GOODER.get(st, 0) > _GOODER.get(pmap[code], 0)
+            r["变化标记"] = "⤴变动" if (up and st in _ENTERABLE) else ""
+    hi = [r for r in cur if r["变化标记"]]
+    lo = [r for r in cur if not r["变化标记"]]
+    return hi + lo
+
+
 def _load(code):
     from akshare_gateway import akshare_gw
     df = akshare_gw.local.get_kline(code, kline_type="day", limit=600)
