@@ -17,7 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # 便于 import
 import export_watchlist_md as EXP
 import export_watchlist_xlsx as XLS   # openpyxl 仅在 build 时才 import,顶层导入安全
 
-ENV_PATH = "/home/tdxback/aiagents-stock/.env"
+# 宿主直跑读宿主 .env；容器内(docker exec,盘中脚本)宿主路径不存在→回退 /app/.env
+ENV_PATH = next((p for p in ("/home/tdxback/aiagents-stock/.env", "/app/.env") if os.path.exists(p)),
+                "/home/tdxback/aiagents-stock/.env")
 DEFAULT_CSV = "/home/tdxback/aiagents-stock/data/profit_mining/每日自选股清单.csv"
 
 # 邮件正文 HTML 表格列(与文档一致,含信号日期)
