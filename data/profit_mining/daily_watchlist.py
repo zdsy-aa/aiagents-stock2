@@ -58,12 +58,16 @@ def mark_changes(cur, prev):
     return hi + lo
 
 
-def _load(code):
+def _load(code, live_bars=None):
     from akshare_gateway import akshare_gw
     df = akshare_gw.local.get_kline(code, kline_type="day", limit=600)
     if df is None or df.empty:
         return None
-    return df.rename(columns=_RENAME).set_index("日期").sort_index()[["Open", "High", "Low", "Close", "Volume"]]
+    df = df.rename(columns=_RENAME).set_index("日期").sort_index()[["Open", "High", "Low", "Close", "Volume"]]
+    if live_bars:
+        import intraday_quote as IQ
+        df = IQ.inject_today_bar(df, live_bars.get(str(code).zfill(6)), pd.Timestamp.now().normalize())
+    return df
 
 
 def _refresh_index():
@@ -142,16 +146,30 @@ def load_signals(post_db=SIGDB, intraday_db=None, today=None, window_days=2, sca
 
 
 def main():
+    INTRADAY = os.getenv("WL_INTRADAY") == "1"
+    LIVE_BARS = None
+    INTRA_DB = "/app/data/chanlun_signals_intraday.db"
+    slot = os.getenv("WL_SLOT", pd.Timestamp.now().strftime("%H%M"))   # 时段标签，用于文件名
+    if INTRADAY:
+        import intraday_quote as IQ
+        LIVE_BARS = IQ.fetch_market_snapshot()
+        print(f"[盘中选股] WL_INTRADAY=1，实时快照 {len(LIVE_BARS)} 只，时段 {slot}", flush=True)
+
     _refresh_index()
     idx = pd.read_csv(IDXCSV, encoding="utf-8-sig"); idx["日期"] = pd.to_datetime(idx["日期"])
     idx = idx.set_index("日期").sort_index()
     ist = F.index_state(idx[["Open", "High", "Low", "Close", "Volume"]])
 
-    sd = sys.argv[1] if len(sys.argv) > 1 else None
-    rows = load_signals(scan_date=sd)
-    if sd is None:
-        sd = max((r.get("scan_date") for r in rows),
-                 default=pd.Timestamp.now().strftime("%Y-%m-%d"))
+    if INTRADAY:
+        today = pd.Timestamp.now().strftime("%Y-%m-%d")
+        rows = load_signals(post_db=SIGDB, intraday_db=INTRA_DB, today=today, window_days=2)
+        sd = today
+    else:
+        sd = sys.argv[1] if len(sys.argv) > 1 else None
+        rows = load_signals(scan_date=sd)
+        if sd is None:
+            sd = max((r.get("scan_date") for r in rows),
+                     default=pd.Timestamp.now().strftime("%Y-%m-%d"))
     print(f"[每日选股] scan_date={sd}，候选缠论买点 {len(rows)} 个，过滤中(含尖刺金叉筹码计算)…", flush=True)
 
     # 星级阈值(阶段一回测固化)：核心5★/精选2★。缺失则降级为不打星。
@@ -183,7 +201,7 @@ def main():
     t0 = time.time()
     for k, r in enumerate(rows, 1):
         code = str(r["code"]).zfill(6)
-        df = _load(code)
+        df = _load(code, live_bars=LIVE_BARS)
         if df is None or len(df) < 70:
             continue
         dates = {d.strftime("%Y-%m-%d"): p for p, d in enumerate(df.index)}
@@ -292,9 +310,25 @@ def main():
             "扫描日价", "止损价", "止盈价",
             "命中规则", "精选", "资金确认", "中枢底部", "量比", "获利盘%", "大盘环境", "优先级",
             "可入状态", "星级", "预估胜率", "大涨率"]
-    # 1) latest（向后兼容）；2) 按扫描日期存历史(不覆盖)
-    os.makedirs(HISTDIR, exist_ok=True)
-    for path in (OUT, f"{HISTDIR}/每日自选股清单_{sd}.csv"):
+    # 1) latest（向后兼容）；2) 按扫描日期存历史(不覆盖)；盘中模式另存独立目录+高亮
+    if INTRADAY:
+        intra_dir = f"{HISTDIR}/intraday"
+        os.makedirs(intra_dir, exist_ok=True)
+        import glob as _g
+        prevs = sorted(_g.glob(f"{intra_dir}/每日自选股清单_{sd}_*.csv"))
+        prev_rows = None
+        if prevs:
+            import csv as _csv
+            with open(prevs[-1], encoding="utf-8-sig") as f:
+                prev_rows = list(_csv.DictReader(f))
+        out = mark_changes(out, prev_rows)
+        cols = ["变化标记"] + cols           # highlight column first
+        paths = [f"{intra_dir}/每日自选股清单_{sd}_{slot}.csv",
+                 f"{intra_dir}/每日自选股清单_latest.csv"]
+    else:
+        os.makedirs(HISTDIR, exist_ok=True)
+        paths = [OUT, f"{HISTDIR}/每日自选股清单_{sd}.csv"]
+    for path in paths:
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.DictWriter(f, fieldnames=cols); w.writeheader(); w.writerows(out)
     nA = sum(1 for x in out if "A" in x["命中规则"]); nB = sum(1 for x in out if "B" in x["命中规则"])
