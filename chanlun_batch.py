@@ -28,7 +28,8 @@ def _load(symbol: str, kind: str, limit: int, live_bars=None):
     df = df[["Open", "High", "Low", "Close", "Volume"]]
     if live_bars and kind == "day":
         import sys as _sys
-        _sys.path.insert(0, "/app/data/profit_mining")
+        if "/app/data/profit_mining" not in _sys.path:   # 防逐股重复插入撑大 sys.path
+            _sys.path.insert(0, "/app/data/profit_mining")
         import intraday_quote as IQ
         code = str(symbol)[-6:].zfill(6)
         df = IQ.inject_today_bar(df, live_bars.get(code), pd.Timestamp.now().normalize())
@@ -83,11 +84,12 @@ def scan_codes(codes, db: ChanlunSignalDB, scan_date=None, days=7, name_board=No
     return len(rows)
 
 
-def export_scan_csv(db: ChanlunSignalDB, scan_date: str, out_dir: str = None) -> str:
-    """把指定批次完整名单导出 CSV 备份(仅备份，不参与前台展示)。返回文件路径。"""
+def export_scan_csv(db: ChanlunSignalDB, scan_date: str, out_dir: str = None, suffix: str = "") -> str:
+    """把指定批次完整名单导出 CSV 备份(仅备份，不参与前台展示)。返回文件路径。
+    suffix: 文件名后缀(盘中各时段用 _HHMM 区分，避免互相/被盘后覆盖)。"""
     out_dir = out_dir or os.path.join(DATA_DIR, "chanlun_history")
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"{scan_date}.csv")
+    path = os.path.join(out_dir, f"{scan_date}{suffix}.csv")
     df = db.get_signals_by_scan_date(scan_date)
     df.to_csv(path, index=False, encoding="utf-8-sig")  # utf-8-sig 便于 Excel 中文
     return path
@@ -118,7 +120,12 @@ def main():
     n = scan_codes(codes, db, scan_date=scan_date, name_board=name_board, live_bars=live_bars)
     logger.info(f"[缠论批量] 完成：写入 {n} 条买点信号，耗时 {time.time()-t0:.0f}s")
     try:
-        csv_path = export_scan_csv(db, scan_date)
+        if intraday:   # 盘中备份另存 intraday 子目录并带时段后缀，不覆盖盘后/各时段彼此
+            csv_path = export_scan_csv(db, scan_date,
+                                       out_dir=os.path.join(DATA_DIR, "chanlun_history", "intraday"),
+                                       suffix="_" + datetime.now().strftime("%H%M"))
+        else:
+            csv_path = export_scan_csv(db, scan_date)
         logger.info(f"[缠论批量] 已导出 CSV 备份：{csv_path}")
     except Exception as e:
         logger.warning(f"[缠论批量] CSV 备份导出失败(不影响落库): {type(e).__name__}: {e}")

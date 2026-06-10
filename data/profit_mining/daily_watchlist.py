@@ -329,13 +329,15 @@ def main():
         os.makedirs(HISTDIR, exist_ok=True)
         paths = [OUT, f"{HISTDIR}/每日自选股清单_{sd}.csv"]
     for path in paths:
-        with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        tmp = f"{path}.tmp"
+        with open(tmp, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.DictWriter(f, fieldnames=cols); w.writeheader(); w.writerows(out)
+        os.replace(tmp, path)   # 原子替换，避免前台/推送读到半截 _latest.csv
     nA = sum(1 for x in out if "A" in x["命中规则"]); nB = sum(1 for x in out if "B" in x["命中规则"])
     nC = sum(1 for x in out if x["精选"] == "★★核心"); nR = sum(1 for x in out if x["精选"])
     nZ = sum(1 for x in out if x["资金确认"]); nZS = sum(1 for x in out if x["中枢底部"])
     print(f"[每日选股] scan_date={sd} 命中 {len(out)} 只（A抄底{nA}/B抢筹{nB}，精选{nR}其中核心{nC}，"
-          f"资金确认{nZ}/中枢底部{nZS}，已剔除获利盘>70%，大盘非空头危险），写入 {OUT} + 历史，{int(time.time()-t0)}s", flush=True)
+          f"资金确认{nZ}/中枢底部{nZS}，已剔除获利盘>70%，大盘非空头危险），写入 {paths[0]} + 历史，{int(time.time()-t0)}s", flush=True)
     for x in out[:15]:
         print(f"  {x['精选']:<5} {x['优先级']:<7} {x['命中规则']:<5} {x['股票代码']} "
               f"{x['股票名称']:<6} {x['买点类型']} 量比{x['量比']} {x['大盘环境']}")
