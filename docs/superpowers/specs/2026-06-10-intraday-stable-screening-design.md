@@ -45,9 +45,12 @@
 
 接口：
 - `fetch_market_snapshot() -> dict[str, dict]`
-  - 经 `akshare_gw` 调 `stock_zh_a_spot_em`（走 5 级降级链）一次取全市场。
+  - **数据源优先级（已定）：TDX 本地优先 → akshare 兜底**。
+    - 先走 TDX 本地全市场/逐只快照（快、无东财 IP 封锁/代理坑，见部署记忆）；
+    - TDX 取不到（容器内 TDX 不通/字段缺）时，再经 `akshare_gw` 调 `stock_zh_a_spot_em`（走 5 级降级链）兜底；
+    - 两者都失败返回 `{}`（上游降级为纯历史）。
   - 返回 `{code(6位): {"Open":今开,"High":最高,"Low":最低,"Close":现价,"Volume":成交量}}`。
-  - 字段缺失/异常的票跳过；整体失败返回 `{}`。
+  - 字段缺失/异常的票跳过。
 - `inject_today_bar(df, bar, today) -> DataFrame`
   - `df` = 标准 OHLCV（index=日期）。`today` = `pd.Timestamp(当天)`。
   - 若 `df` 末行已是今天 → 用 `bar` 覆盖该行；否则追加今天一行。返回新 df（不改入参）。
@@ -84,11 +87,12 @@
 ### 4.5 推送（新建 `ops/intraday_watchlist_and_mail.sh`）
 
 参照 `ops/daily_watchlist_and_mail.sh`：
+0. **并发锁（已定）**：脚本开头 `flock -n` 抢独占锁（如 `/tmp/intraday_watchlist.lock`）。抢不到说明上一轮还在跑 → 记日志后直接退出 0，**不与上一轮叠跑抢资源**（防某轮 baostock 拖慢咬尾下一轮）。
 1. 交易日门控（复用仓库已有交易日判断）。非交易日退出 0。
 2. `docker exec ... CHANLUN_INTRADAY=1 python3 chanlun_batch.py`（盘中重算）。
 3. `docker exec ... WL_INTRADAY=1 python3 daily_watchlist.py`（盘中清单）。
 4. `export_watchlist_md.py / export_watchlist_xlsx.py` 加 `--intraday`（读盘中 latest，文件名带 `_{HHMM}`）。
-5. `push_watchlist.py --intraday --slot {HH:MM}`：主题 `🛡️盘中选股 {date} {HH:MM} 时段`，正文最上"本时段新增/变动"区，下接全量可入清单；附 md/xlsx；收件人 `.env EMAIL_TO`。
+5. `push_watchlist.py --intraday --slot {HH:MM}`：主题 `🛡️盘中选股 {date} {HH:MM} 时段`，正文结构（自上而下）：**① 醒目免责区（已定）**——"⚠️ 盘中信号基于未收盘实时 bar，为**临时态**，价格变动/收盘后可能消失，仅供盘中参考"；② "本时段新增/变动"区；③ 全量可入清单。附 md/xlsx；收件人 `.env EMAIL_TO`。
 6. 各步独立；重算/清单失败 → 用上一轮盘中清单照常发（参照盘后脚本）。
 
 ### 4.6 调度（宿主 crontab）
@@ -121,7 +125,7 @@
 ## 7. 上线前置（运维）
 
 - 拉起容器（当前 `docker exec` 取不到 agentsstock1）。
-- 重建镜像：把**已存在但未提交**的🛡️稳定选股导航（`app.py` nav_stable / show_stable）、盘后 `chanlun_schedule.sh` 顺带跑 watchlist、`扫描日价` 列、`requirements.txt` baostock 一并纳入本次提交并随镜像生效。
+- 重建镜像：**用户已确认**——把**已存在但未提交**的🛡️稳定选股导航（`app.py` nav_stable / show_stable）、盘后 `chanlun_schedule.sh` 顺带跑 watchlist、`扫描日价` 列、`requirements.txt` baostock 这批 6-03 改动，连同本次盘中化改动一并提交并随镜像上线。
 - 装宿主 crontab 4 条 + 建 `report/intraday_watchlist_mail.log`。
 
 ## 8. 非目标（YAGNI）
