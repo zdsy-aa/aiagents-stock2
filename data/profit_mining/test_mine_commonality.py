@@ -47,8 +47,26 @@ def test_finalize_and_rank():
     print("OK finalize_and_rank")
 
 
+def test_accumulate_stock():
+    import pandas as pd
+    # 造一段足够长、含明显涨跌的K线
+    base = list(range(20, 60)) + list(range(60, 20, -1))   # 上后下
+    c = [float(x) for x in base]
+    df = pd.DataFrame({"Open": c, "High": [x + 1 for x in c],
+                       "Low": [x - 1 for x in c], "Close": c,
+                       "Volume": [1000.0] * len(c)},
+                      index=pd.date_range("2020-01-01", periods=len(c), freq="D"))
+    counts = M.accumulate_stock(df, pcts=(0.15,))
+    # 至少应有 方案A/B × buy/sell × 0.15 的若干 key，计数为6元list
+    assert any(k[0] == "A" and k[1] == "buy" and k[2] == 0.15 for k in counts), list(counts)[:3]
+    sample = next(iter(counts.values()))
+    assert len(sample) == 6
+    print("OK accumulate_stock")
+
+
 if __name__ == "__main__":
     test_count_for_signal()
     test_count_out_of_range_window()
     test_finalize_and_rank()
+    test_accumulate_stock()
     print("ALL OK")
