@@ -52,6 +52,7 @@ def filter_rank(rows, cover_min=0.70):
 
 import swing_samples as SW
 import param_signals as PS
+import group_dims as GD
 from collections import defaultdict
 
 DEFAULT_PCTS = (0.10, 0.15, 0.20)
@@ -66,30 +67,43 @@ def _win_arrays(windows, n):
     return st, en
 
 
-def accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4):
-    """单股 → 计数dict key=(plan,side,pct,params) val=[6元累计]。大网格优化版：
-    1) 分量缓存：信号=分量&MACD；MACD只依赖(f,s,sig)、fib只依赖(N,r,b)、bbi只依赖
-       (periods,form)，各只算一次再做布尔AND，pandas计算从~7200次降到~260次/股。
-    2) 向量化计数：窗口仅依赖(side,pct)且为不相交连续区间，用累积和O(1)取每窗命中，
-       替代原 count_for_signal 的逐窗 python 循环。
-    结果与 plan_a/b_signal + count_for_signal 数值完全一致(见 test)。"""
+def accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4, groups=None):
+    """单股 → 计数dict key=(group,plan,side,pct,params) val=[6元累计]。
+    groups=None → 仅 ALL(向后兼容)。否则 groups={'board':标签或None,'size':标签或None,
+    'vol_cuts':[c1,c2]或None}。ALL/板块/市值整股复用同一窗口计数；波动率按拐点vol20切子集。
+    信号每股每(plan,params,side)只算一次,跨pct与跨组复用。"""
     out = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
     n = len(df)
     high = df["High"].tolist(); low = df["Low"].tolist()
-    # 窗口结构 per (side,pct): (starts, ends, seg_total, bars_pos)；无窗口=None(不建key,与原逻辑一致)
+    shared = ["ALL"]
+    if groups:
+        if groups.get("board"):
+            shared.append(groups["board"])
+        if groups.get("size"):
+            shared.append(groups["size"])
+    vol_cuts = groups.get("vol_cuts") if groups else None
+    vol20 = GD.vol20_series(df) if vol_cuts else None
+
+    # 窗口结构 per (side,pct): list of (labels, starts, ends, seg_total, bars_pos)
     W = {}
     for pct in pcts:
         up, down = SW.positive_windows(high, low, pct, fwd)
         for side, wins in (("buy", up), ("sell", down)):
+            entries = []
             if wins:
                 st, en = _win_arrays(wins, n)
-                W[(side, pct)] = (st, en, len(wins), int((en - st + 1).sum()))
-            else:
-                W[(side, pct)] = None
+                entries.append((shared, st, en, len(wins), int((en - st + 1).sum())))
+                if vol20 is not None:
+                    for b, sub in GD.split_windows_by_vol(wins, vol20, vol_cuts).items():
+                        if sub:
+                            sst, sen = _win_arrays(sub, n)
+                            entries.append(([f"波动率={GD.VOL_LABELS[b]}"], sst, sen,
+                                            len(sub), int((sen - sst + 1).sum())))
+            W[(side, pct)] = entries
 
     for side in ("buy", "sell"):
-        active = [pct for pct in pcts if W[(side, pct)] is not None]
-        if not active:
+        has = any(W[(side, pct)] for pct in pcts)
+        if not has:
             continue
         macd_cache, fib_cache, bbi_cache = {}, {}, {}
 
@@ -117,15 +131,16 @@ def accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4):
             return m
 
         def tally(plan, params, sig):
-            csum = np.concatenate(([0], np.cumsum(sig, dtype=np.int64)))  # 只算一次,跨pct复用
+            csum = np.concatenate(([0], np.cumsum(sig, dtype=np.int64)))
             fires_all = int(sig.sum())
-            for pct in active:
-                st, en, seg_total, bars_pos = W[(side, pct)]
-                wf = csum[en + 1] - csum[st]                  # 每窗命中根数(区间和)
-                a = out[(plan, side, pct, params)]
-                a[0] += int(np.count_nonzero(wf)); a[1] += seg_total
-                a[2] += int(wf.sum()); a[3] += bars_pos
-                a[4] += fires_all; a[5] += n
+            for pct in pcts:
+                for labels, st, en, seg_total, bars_pos in W[(side, pct)]:
+                    wf = csum[en + 1] - csum[st]
+                    seg_hit = int(np.count_nonzero(wf)); fires_pos = int(wf.sum())
+                    for g in labels:
+                        a = out[(g, plan, side, pct, params)]
+                        a[0] += seg_hit; a[1] += seg_total; a[2] += fires_pos
+                        a[3] += bars_pos; a[4] += fires_all; a[5] += n
 
         for params in PS.PLAN_A_GRID:
             N, r, b, f, s, sg = params

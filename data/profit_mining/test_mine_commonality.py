@@ -58,10 +58,54 @@ def test_accumulate_stock():
                       index=pd.date_range("2020-01-01", periods=len(c), freq="D"))
     counts = M.accumulate_stock(df, pcts=(0.15,))
     # 至少应有 方案A/B × buy/sell × 0.15 的若干 key，计数为6元list
-    assert any(k[0] == "A" and k[1] == "buy" and k[2] == 0.15 for k in counts), list(counts)[:3]
+    assert any(k[0] == "ALL" and k[1] == "A" and k[2] == "buy" and k[3] == 0.15 for k in counts), list(counts)[:3]
     sample = next(iter(counts.values()))
     assert len(sample) == 6
     print("OK accumulate_stock")
+
+
+def test_accumulate_stock_grouped_conservation():
+    import pandas as pd
+    import numpy as np
+    base = list(range(20, 60)) + list(range(60, 20, -1))
+    c = [float(x) for x in base]
+    df = pd.DataFrame({"Open": c, "High": [x + 1 for x in c],
+                       "Low": [x - 1 for x in c], "Close": c,
+                       "Volume": [1000.0] * len(c)},
+                      index=pd.date_range("2020-01-01", periods=len(c), freq="D"))
+    groups = {"board": "板块=创业板", "size": "市值=小盘", "vol_cuts": [0.01, 0.03]}
+    counts = M.accumulate_stock(df, pcts=(0.15,), groups=groups)
+    # 1) 板块/市值组的 6 元计数应与 ALL 完全一致(单股全归入这两组)
+    all_keys = [k for k in counts if k[0] == "ALL"]
+    assert all_keys, "应有 ALL 键"
+    for ak in all_keys:
+        bk = ("板块=创业板",) + ak[1:]
+        sk = ("市值=小盘",) + ak[1:]
+        assert counts[bk] == counts[ak], (ak, counts[bk], counts[ak])
+        assert counts[sk] == counts[ak], (ak, counts[sk], counts[ak])
+    # 2) 波动率三桶的窗口计数(idx0-3)之和 == ALL 的窗口计数
+    for ak in all_keys:
+        agg = [0, 0, 0, 0]
+        for lab in ("波动率=低", "波动率=中", "波动率=高"):
+            vk = (lab,) + ak[1:]
+            if vk in counts:
+                for i in range(4):
+                    agg[i] += counts[vk][i]
+        assert agg == counts[ak][:4], (ak, agg, counts[ak][:4])
+    print("OK accumulate_stock_grouped_conservation")
+
+
+def test_accumulate_stock_no_groups_only_all():
+    import pandas as pd
+    base = list(range(20, 60)) + list(range(60, 20, -1))
+    c = [float(x) for x in base]
+    df = pd.DataFrame({"Open": c, "High": [x + 1 for x in c],
+                       "Low": [x - 1 for x in c], "Close": c,
+                       "Volume": [1000.0] * len(c)},
+                      index=pd.date_range("2020-01-01", periods=len(c), freq="D"))
+    counts = M.accumulate_stock(df, pcts=(0.15,))     # groups=None
+    assert all(k[0] == "ALL" for k in counts), "无 groups 时只应有 ALL 键"
+    print("OK accumulate_stock_no_groups_only_all")
 
 
 def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
@@ -107,5 +151,7 @@ if __name__ == "__main__":
     test_count_out_of_range_window()
     test_finalize_and_rank()
     test_accumulate_stock()
+    test_accumulate_stock_grouped_conservation()
+    test_accumulate_stock_no_groups_only_all()
     test_write_reports()
     print("ALL OK")
