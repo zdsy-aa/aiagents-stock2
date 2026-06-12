@@ -93,14 +93,20 @@ def plan_b_signal(df, periods, form, fast, slow, signal, side):
     return (bb & macd).fillna(False)
 
 
-# ---- 参数网格（spec §4 起点，可调）----
-_MACD = ((12, 26, 9), (8, 17, 9), (6, 19, 9), (5, 35, 5))
+# ---- 参数网格（大幅穷举：覆盖率≥0.5 全参数扫描，2026-06-12）----
+# MACD 网格：fast<slow 才有效，signal∈{5,9}
+_MACD = [(f, s, sig)
+         for f in (5, 6, 8, 10, 12)
+         for s in (17, 19, 26, 35)
+         for sig in (5, 9)
+         if f < s]                                    # = 40 组
 PLAN_A_GRID = [(N, r, b, f, s, sig)
-               for N in (10, 20, 30, 60)
-               for r in (0.382, 0.5, 0.618)
-               for b in (0.005, 0.01, 0.02)
-               for (f, s, sig) in _MACD]
+               for N in (10, 20, 30, 60, 90)
+               for r in (0.382, 0.5, 0.618, 0.786)
+               for b in (0.005, 0.01, 0.02, 0.03)
+               for (f, s, sig) in _MACD]               # 5×4×4×40 = 3200
 PLAN_B_GRID = [(p, form, f, s, sig)
-               for p in ((3, 6, 12, 24), (5, 10, 20, 40), (2, 5, 10, 20))
+               for p in ((3, 6, 12, 24), (5, 10, 20, 40), (2, 5, 10, 20),
+                         (4, 8, 16, 32), (6, 12, 24, 48))
                for form in ("cross", "above")
-               for (f, s, sig) in _MACD]
+               for (f, s, sig) in _MACD]               # 5×2×40 = 400
