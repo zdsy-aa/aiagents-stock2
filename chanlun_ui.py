@@ -1,5 +1,6 @@
 # chanlun_ui.py
-"""缠论选股页：只读 chanlun_signals.db，按扫描日期选批次(默认最新)，展示买点(含理由)与其后首个卖点(含理由)。"""
+"""缠论选股页：①批量选股(只读 chanlun_signals.db 批次，买点+配对卖点)；
+②个股信号查询(实时跑引擎，列单股全历史全部买卖点)。两模式顶部 radio 切换、互不影响。"""
 import streamlit as st
 from chanlun_selector import ChanlunSelector, DISPLAY_NAMES
 
@@ -13,8 +14,41 @@ def _cached_picks(types_key: tuple, scan_date: str):
     return ChanlunSelector().get_chanlun_picks(types=list(types_key), scan_date=scan_date)
 
 
+# 单股查询为实时计算(加载2000根30分钟K线+分析)，较重，按代码缓存。TTL 同批量。
+# 入参应是调用侧已 _normalize 的代码，使 sh600519 / 600519 命中同一条目(缓存键=入参)。
+@st.cache_data(ttl=1800, show_spinner="计算中…")
+def _cached_single(code: str):
+    from chanlun_single import query_stock_signals
+    return query_stock_signals(code)
+
+
+def _display_single_stock():
+    from chanlun_single import DISPLAY_NAMES as SINGLE_NAMES, _normalize
+    st.caption("输入单只股票代码，实时计算该股全历史所有缠论买卖点（1/2/3买 + 1/2/3卖，"
+               "日线本级别 + 30分钟次级别确认）。与批量选股相互独立。")
+    code = st.text_input("股票代码", placeholder="如 600519 或 sh600519",
+                         key="chanlun_single_code")
+    if not code.strip():
+        st.info("请输入股票代码后查询")
+        return
+    ok, df, msg = _cached_single(_normalize(code.strip()))  # 规整后再缓存，统一缓存键
+    st.info(msg)
+    if not ok or df is None:
+        return
+    st.dataframe(df.rename(columns=SINGLE_NAMES), width='stretch', height=460)
+    st.caption("信号参考价=买卖点当根收盘/极值价；止损位仅买点给出（买点前最近中枢下沿 ZD 与 价×0.98 取低）。"
+               "缠论理由含背驰/回踩/突破依据及次级别确认。全历史范围取决于本地日线长度（最多 500 根）。")
+
+
 def display_chanlun_selector():
     st.markdown('<div class="ftc-section">🌀 缠论选股</div>', unsafe_allow_html=True)
+
+    mode = st.radio("功能", ["批量选股", "个股信号查询"], horizontal=True,
+                    label_visibility="collapsed", key="chanlun_mode")
+    if mode == "个股信号查询":
+        _display_single_stock()
+        return
+
     st.caption("严格多级别缠论（日线本级别 + 30分钟次级别确认）·"
                " 选出最近 7 个交易日出现一买/二买/三买的股票。数据源：TDX 本地库。"
                " 信号每日收盘后批量预计算，本页只读结果（初筛候选，请人工复核）。")
