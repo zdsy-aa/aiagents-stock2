@@ -51,10 +51,36 @@ def test_split_windows_by_vol():
     print("OK split_windows_by_vol")
 
 
+def test_extract_mktcap():
+    import pandas as pd
+    import fetch_mktcap_snapshot as FM
+    df = pd.DataFrame({"代码": ["000001", "600000"],
+                       "名称": ["平安银行", "浦发银行"],
+                       "总市值": [3.5e11, 4.2e11]})
+    out = FM.extract_mktcap(df)
+    assert list(out.columns) == ["代码", "总市值"]
+    assert out.iloc[0]["代码"] == "000001"
+    assert abs(out.iloc[0]["总市值"] - 3.5e11) < 1
+    print("OK extract_mktcap")
+
+
+def test_extract_mktcap_missing_col():
+    import pandas as pd
+    import fetch_mktcap_snapshot as FM
+    df = pd.DataFrame({"代码": ["000001"], "最新价": [10.0]})   # 无总市值
+    try:
+        FM.extract_mktcap(df)
+        assert False, "应抛错"
+    except ValueError:
+        print("OK extract_mktcap_missing_col")
+
+
 if __name__ == "__main__":
     test_bucketize()
     test_board_group()
     test_size_group()
     test_vol20_series()
     test_split_windows_by_vol()
+    test_extract_mktcap()
+    test_extract_mktcap_missing_col()
     print("ALL OK")
