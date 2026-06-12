@@ -80,3 +80,27 @@ def surface(df, support_min=100, cover_min=0.20, topn=15):
     if not out:
         return pd.DataFrame(columns=OUT_COLS)
     return pd.concat(out, ignore_index=True)
+
+
+def write_outputs(board, out_dir, ts):
+    """榜单 → CSV(全量) + md(每组Top5,标注正增量真协同/负零增量凑数)。返回 [csv, md] 路径。"""
+    os.makedirs(out_dir, exist_ok=True)
+    csv_path = os.path.join(out_dir, f"L3独立榜_{ts}.csv")
+    board.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    md_path = os.path.join(out_dir, f"L3独立榜_对比_{ts}.md")
+    L = ["# L3 三指标独立榜 — 增量价值对比", "", f"生成 {ts}",
+         "护栏: 支持≥100 且 盈利覆盖率≥0.20，每组按提升度 Top15；"
+         "增量提升度 = L3提升度 − 最优两两子集提升度（正=第三条真协同，负/零=凑数）", ""]
+    for grp, sub in board.groupby("分组", sort=False):
+        L.append(f"## {grp}（{len(sub)} 条）")
+        L.append("| 方案 | 提升度 | 覆盖率 | 增量 | 最优子集 | 判定 |")
+        L.append("|---|---|---|---|---|---|")
+        for _, r in sub.head(5).iterrows():
+            inc = r["增量提升度"]
+            good = isinstance(inc, (int, float)) and inc == inc and inc > 0
+            verdict = "✅真协同" if good else "⚠️凑数"
+            L.append(f"| {r['方案']} | {r['提升度']} | {r['盈利覆盖率']:.0%} | "
+                     f"{inc} | {r['最优两两子集']} | {verdict} |")
+        L.append("")
+    open(md_path, "w", encoding="utf-8").write("\n".join(L))
+    return [csv_path, md_path]

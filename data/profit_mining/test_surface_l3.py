@@ -103,6 +103,22 @@ def test_surface_topn():
     print("OK surface_topn")
 
 
+def test_write_outputs(tmpdir="/tmp/l3_out"):
+    import os, glob, shutil
+    shutil.rmtree(tmpdir, ignore_errors=True)
+    os.makedirs(tmpdir, exist_ok=True)
+    board = S.surface(_scores_df(), support_min=100, cover_min=0.20, topn=15)
+    paths = S.write_outputs(board, tmpdir, "20260612_000000")
+    csvs = glob.glob(os.path.join(tmpdir, "L3独立榜_2*.csv"))
+    mds = glob.glob(os.path.join(tmpdir, "L3独立榜_对比_*.md"))
+    assert len(csvs) == 1 and len(mds) == 1, (csvs, mds)
+    head = open(csvs[0], encoding="utf-8-sig").readline()
+    assert "增量提升度" in head and "最优两两子集" in head, head
+    body = open(mds[0], encoding="utf-8").read()
+    assert "真协同" in body or "凑数" in body         # 判定标注存在
+    print("OK write_outputs")
+
+
 if __name__ == "__main__":
     test_split_conditions()
     test_load_scores()
@@ -110,4 +126,5 @@ if __name__ == "__main__":
     test_marginal_inf_sentinel()
     test_surface()
     test_surface_topn()
+    test_write_outputs()
     print("ALL OK")
