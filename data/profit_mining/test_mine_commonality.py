@@ -73,7 +73,7 @@ def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
          "seg_hit": 7, "seg_total": 10, "coverage": 0.7, "rate_all": 0.02,
          "lift": 10.0, "precision": 0.4},
         # coverage 0.3 < 0.70：达标主榜应排除它，但最佳可达榜仍应收录
-        {"plan": "B", "side": "sell", "pct": 0.10, "params": ((3, 6, 12, 24), 12, 26, 9),
+        {"plan": "B", "side": "sell", "pct": 0.10, "params": ((3, 6, 12, 24), "above", 12, 26, 9),
          "seg_hit": 3, "seg_total": 10, "coverage": 0.3, "rate_all": 0.03,
          "lift": 5.0, "precision": 0.3},
     ]
@@ -96,6 +96,9 @@ def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
     # 最佳可达榜：即便 cov<0.70 也应收录 B卖那条
     b_best = [p for p in csvs if "方案B" in p and "下跌前最佳可达" in p][0]
     assert len(_rows(b_best)) == 2, _rows(b_best)          # 表头+1
+    bhead = _rows(b_best)[0]
+    assert "form" in bhead and "periods" in bhead, bhead   # 形态列(上穿/收上)已落地
+    assert "above" in _rows(b_best)[1], _rows(b_best)[1]
     print("OK write_reports")
 
 
