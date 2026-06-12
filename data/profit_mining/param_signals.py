@@ -63,6 +63,22 @@ def bbi_cross_down(df, periods=(3, 6, 12, 24)):
     return ((df["Close"] < b) & (df["Close"].shift(1) >= b.shift(1))).fillna(False)
 
 
+def bbi_above(df, periods=(3, 6, 12, 24)):
+    # 状态型：收盘站上 BBI（含突破后持续在上方），对应"收上中轨"原意
+    return (df["Close"] > _bbi(df["Close"], periods)).fillna(False)
+
+
+def bbi_below(df, periods=(3, 6, 12, 24)):
+    return (df["Close"] < _bbi(df["Close"], periods)).fillna(False)
+
+
+def _bbi_form(df, periods, form, side):
+    """form: 'cross'=上穿/下破(事件) | 'above'=收上/收下(状态)。"""
+    if form == "cross":
+        return bbi_cross_up(df, periods) if side == "buy" else bbi_cross_down(df, periods)
+    return bbi_above(df, periods) if side == "buy" else bbi_below(df, periods)
+
+
 # ---- 方案组合 ----
 def plan_a_signal(df, N, ratio, band, fast, slow, signal, side):
     macd = macd_golden(df, fast, slow, signal) if side == "buy" else macd_dead(df, fast, slow, signal)
@@ -71,9 +87,9 @@ def plan_a_signal(df, N, ratio, band, fast, slow, signal, side):
     return (fib & macd).fillna(False)
 
 
-def plan_b_signal(df, periods, fast, slow, signal, side):
+def plan_b_signal(df, periods, form, fast, slow, signal, side):
     macd = macd_golden(df, fast, slow, signal) if side == "buy" else macd_dead(df, fast, slow, signal)
-    bb = (bbi_cross_up(df, periods) if side == "buy" else bbi_cross_down(df, periods))
+    bb = _bbi_form(df, periods, form, side)
     return (bb & macd).fillna(False)
 
 
@@ -84,6 +100,7 @@ PLAN_A_GRID = [(N, r, b, f, s, sig)
                for r in (0.382, 0.5, 0.618)
                for b in (0.005, 0.01, 0.02)
                for (f, s, sig) in _MACD]
-PLAN_B_GRID = [(p, f, s, sig)
+PLAN_B_GRID = [(p, form, f, s, sig)
                for p in ((3, 6, 12, 24), (5, 10, 20, 40), (2, 5, 10, 20))
+               for form in ("cross", "above")
                for (f, s, sig) in _MACD]
