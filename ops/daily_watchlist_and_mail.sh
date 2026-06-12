@@ -6,7 +6,7 @@
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"   # cron 环境 PATH 兜底
 OPS="/home/tdxback/aiagents-stock/ops"
 REPORT="/home/tdxback/report"
-TS=$(date +%Y%m%d)
+TS=$(date +%F)   # YYYY-MM-DD，与邮件附件名 每日稳定选股_<扫描日期> 同格式
 echo "[$(date '+%F %T')] === 每日清单刷新+发送 开始 ==="
 
 # 1) 刷新清单(容器内)
