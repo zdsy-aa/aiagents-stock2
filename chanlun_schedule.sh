@@ -25,6 +25,13 @@ while true; do
     log INFO "开始重算缠论信号 …"
     if python3 /app/chanlun_batch.py >>"$LOG" 2>&1; then
         log INFO "缠论信号重算完成"
+        # 缠论买点刷新后，生成「稳定选股」今日清单（盘后最新数据；失败不影响主流程）
+        log INFO "生成稳定选股今日清单 …"
+        if python3 /app/data/profit_mining/daily_watchlist.py >>"$LOG" 2>&1; then
+            log INFO "稳定选股清单已更新（data/profit_mining/每日自选股清单.csv）"
+        else
+            log WARN "稳定选股清单生成失败 exit=$?（不影响缠论主流程）"
+        fi
     else
         log ERROR "缠论信号重算失败 exit=$?，等待下一周期重试"
     fi
