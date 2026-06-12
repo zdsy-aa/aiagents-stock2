@@ -30,13 +30,14 @@ def test_count_out_of_range_window():
 def test_finalize_and_rank():
     # 两个key累加计数 → 覆盖率/提升度/精确度
     counts = {
-        ("A", "buy", 0.15, (20, 0.618, 0.01, 12, 26, 9)):
+        ("ALL", "A", "buy", 0.15, (20, 0.618, 0.01, 12, 26, 9)):
             [7, 10, 8, 40, 20, 1000],     # cover 0.7, rate_pos .2, rate_all .02 → lift 10
-        ("A", "buy", 0.15, (10, 0.5, 0.01, 12, 26, 9)):
+        ("ALL", "A", "buy", 0.15, (10, 0.5, 0.01, 12, 26, 9)):
             [5, 10, 1, 40, 50, 1000],     # cover 0.5 → 被滤
     }
     rows = M.finalize(counts)
     assert len(rows) == 2
+    assert all(r["group"] == "ALL" for r in rows)
     kept = M.filter_rank(rows, cover_min=0.70)
     assert len(kept) == 1, kept
     r = kept[0]
@@ -45,6 +46,23 @@ def test_finalize_and_rank():
     assert abs(r["precision"] - 8 / 20) < 1e-9
     assert r["plan"] == "A" and r["side"] == "buy" and r["pct"] == 0.15
     print("OK finalize_and_rank")
+
+
+def test_uplift_rows():
+    # 同参数: ALL lift=2, 某组 lift=4 → uplift=2, ratio=2
+    params = (20, 0.618, 0.01, 12, 26, 9)
+    counts = {
+        ("ALL", "A", "buy", 0.2, params): [6, 10, 30, 100, 100, 5000],
+        ("板块=创业板", "A", "buy", 0.2, params): [8, 10, 60, 100, 100, 2000],
+    }
+    rows = M.finalize(counts)
+    enriched = M.attach_uplift(rows)
+    grp = [r for r in enriched if r["group"] == "板块=创业板"][0]
+    assert "lift_all" in grp and "uplift" in grp and "uplift_ratio" in grp
+    allrow = [r for r in enriched if r["group"] == "ALL"][0]
+    assert abs(grp["lift_all"] - allrow["lift"]) < 1e-9
+    assert abs(grp["uplift"] - (grp["lift"] - allrow["lift"])) < 1e-9
+    print("OK uplift_rows")
 
 
 def test_accumulate_stock():
@@ -113,11 +131,11 @@ def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
     shutil.rmtree(tmpdir_path, ignore_errors=True)
     os.makedirs(tmpdir_path, exist_ok=True)
     rows = [
-        {"plan": "A", "side": "buy", "pct": 0.15, "params": (20, 0.618, 0.01, 12, 26, 9),
+        {"group": "ALL", "plan": "A", "side": "buy", "pct": 0.15, "params": (20, 0.618, 0.01, 12, 26, 9),
          "seg_hit": 7, "seg_total": 10, "coverage": 0.7, "rate_all": 0.02,
          "lift": 10.0, "precision": 0.4},
         # coverage 0.3 < 0.70：达标主榜应排除它，但最佳可达榜仍应收录
-        {"plan": "B", "side": "sell", "pct": 0.10, "params": ((3, 6, 12, 24), "above", 12, 26, 9),
+        {"group": "ALL", "plan": "B", "side": "sell", "pct": 0.10, "params": ((3, 6, 12, 24), "above", 12, 26, 9),
          "seg_hit": 3, "seg_total": 10, "coverage": 0.3, "rate_all": 0.03,
          "lift": 5.0, "precision": 0.3},
     ]
@@ -150,6 +168,7 @@ if __name__ == "__main__":
     test_count_for_signal()
     test_count_out_of_range_window()
     test_finalize_and_rank()
+    test_uplift_rows()
     test_accumulate_stock()
     test_accumulate_stock_grouped_conservation()
     test_accumulate_stock_no_groups_only_all()
