@@ -25,7 +25,7 @@ def count_for_signal(signal, windows):
     return seg_hit, seg_total, fires_pos, bars_pos, fires_all, bars_all
 
 
-# key = (plan, side, pct, paramtuple)；paramtuple: A=(N,ratio,band,f,s,sig) B=(periods,f,s,sig)
+# key = (plan, side, pct, paramtuple)；paramtuple: A=(N,ratio,band,f,s,sig) B=(periods,form,f,s,sig)
 def finalize(counts):
     """counts(已跨股累加) → list[dict] 含 coverage/lift/precision 等。"""
     rows = []
@@ -98,14 +98,15 @@ def _expand_params(plan, params):
     if plan == "A":
         N, ratio, band, f, s, sig = params
         return {"N": N, "ratio": ratio, "band": band, "fast": f, "slow": s, "signal": sig}
-    periods, f, s, sig = params
-    return {"periods": "/".join(map(str, periods)), "fast": f, "slow": s, "signal": sig}
+    periods, form, f, s, sig = params
+    return {"periods": "/".join(map(str, periods)), "form": form,
+            "fast": f, "slow": s, "signal": sig}
 
 
 def _write_board(fpath, plan, side, pct, ranked):
     """把 ranked(已排序的 finalize 行) 写成一张 CSV。"""
     pcols = (["N", "ratio", "band", "fast", "slow", "signal"] if plan == "A"
-             else ["periods", "fast", "slow", "signal"])
+             else ["periods", "form", "fast", "slow", "signal"])
     metric_cols = ["seg_hit", "seg_total", "coverage", "rate_all", "lift", "precision"]
     with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
         w = _csv.writer(f)
