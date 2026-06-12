@@ -1,4 +1,5 @@
 # mine_commonality.py —— 方案A/B 涨跌前期共性挖掘：逐股累加→覆盖率/提升度/精确度→报告。
+import os
 import numpy as np
 
 
@@ -347,11 +348,53 @@ def _universe():
     return sorted(codes)
 
 
+_GCTX = None
+
+
+def _group_ctx():
+    """懒加载(每 worker 一次): {board_map, mktcap_map, size_cuts, vol_cuts}。缺文件则对应维度为空。"""
+    global _GCTX
+    if _GCTX is not None:
+        return _GCTX
+    import csv as c2
+    # 板块图: events_labeled.csv 代码->板块
+    board_map = {}
+    with open("/app/data/profit_mining/events_labeled.csv", encoding="utf-8-sig") as f:
+        for r in c2.DictReader(f):
+            code = r.get("股票代码")
+            if code and code not in board_map:
+                board_map[code] = r.get("板块") or None
+    # 市值图
+    mktcap_map = {}
+    snap = "/app/data/profit_mining/stock_mktcap_snapshot.csv"
+    if os.path.exists(snap):
+        with open(snap, encoding="utf-8-sig") as f:
+            for r in c2.DictReader(f):
+                try:
+                    mktcap_map[r["代码"]] = float(r["总市值"])
+                except (ValueError, KeyError):
+                    pass
+    # 切点
+    size_cuts = vol_cuts = None
+    bpath = "/app/data/profit_mining/group_buckets.json"
+    if os.path.exists(bpath):
+        b = GD.load_buckets(bpath)
+        size_cuts = b.get("市值", {}).get("cuts")
+        vol_cuts = b.get("波动率", {}).get("cuts")
+    _GCTX = {"board_map": board_map, "mktcap_map": mktcap_map,
+             "size_cuts": size_cuts, "vol_cuts": vol_cuts}
+    return _GCTX
+
+
 def _proc(code):
     df = _load_kline(code)
     if df is None or len(df) < 80:
         return {}
-    return accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4)
+    ctx = _group_ctx()
+    groups = {"board": GD.board_group(ctx["board_map"].get(code)),
+              "size": GD.size_group(ctx["mktcap_map"].get(code), ctx["size_cuts"]),
+              "vol_cuts": ctx["vol_cuts"]}
+    return accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4, groups=groups)
 
 
 def main():
@@ -370,7 +413,9 @@ def main():
             if k % 500 == 0:
                 print(f"  …{k}/{len(codes)}，{int(time.time()-t0)}s", flush=True)
     rows = finalize(dict(total))
-    paths = write_reports(rows, out_dir="/app/data/commonality_reports")  # 已挂载,宿主可见
+    run_ts = time.strftime("%Y%m%d_%H%M%S")
+    paths = write_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)           # 全市场ALL榜
+    paths += write_grouped_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)  # 分组uplift榜
     print(f"[共性挖掘] 股票{len(codes)} 组合keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
     for pth in paths:
         print("  写", pth, flush=True)
