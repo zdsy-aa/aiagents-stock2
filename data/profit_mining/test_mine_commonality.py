@@ -72,18 +72,30 @@ def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
         {"plan": "A", "side": "buy", "pct": 0.15, "params": (20, 0.618, 0.01, 12, 26, 9),
          "seg_hit": 7, "seg_total": 10, "coverage": 0.7, "rate_all": 0.02,
          "lift": 10.0, "precision": 0.4},
+        # coverage 0.3 < 0.70：达标主榜应排除它，但最佳可达榜仍应收录
         {"plan": "B", "side": "sell", "pct": 0.10, "params": ((3, 6, 12, 24), 12, 26, 9),
-         "seg_hit": 8, "seg_total": 10, "coverage": 0.8, "rate_all": 0.03,
+         "seg_hit": 3, "seg_total": 10, "coverage": 0.3, "rate_all": 0.03,
          "lift": 5.0, "precision": 0.3},
     ]
     paths = M.write_reports(rows, out_dir=tmpdir_path, ts="20260612_000000")
     csvs = glob.glob(os.path.join(tmpdir_path, "*.csv"))
     md = glob.glob(os.path.join(tmpdir_path, "*.md"))
     assert len(csvs) >= 1 and len(md) == 1, (csvs, md)
-    # A买点榜应含 N/ratio/band/fast 展开列
-    head = open([p for p in csvs if "方案A" in p and "上涨前" in p][0],
+    # A买点达标主榜应含 N/ratio/band/fast 展开列
+    head = open([p for p in csvs if "方案A" in p and "上涨前共性" in p][0],
                 encoding="utf-8-sig").readline()
     assert "ratio" in head and "coverage" in head, head
+
+    def _rows(path):
+        return open(path, encoding="utf-8-sig").read().splitlines()
+    # 达标主榜(coverage≥0.70)：A买1行数据，B卖(cov0.3)应空
+    a_main = [p for p in csvs if "方案A" in p and "上涨前共性" in p][0]
+    b_main = [p for p in csvs if "方案B" in p and "下跌前共性" in p][0]
+    assert len(_rows(a_main)) == 2, _rows(a_main)          # 表头+1
+    assert len(_rows(b_main)) == 1, _rows(b_main)          # 仅表头(无达标)
+    # 最佳可达榜：即便 cov<0.70 也应收录 B卖那条
+    b_best = [p for p in csvs if "方案B" in p and "下跌前最佳可达" in p][0]
+    assert len(_rows(b_best)) == 2, _rows(b_best)          # 表头+1
     print("OK write_reports")
 
 
