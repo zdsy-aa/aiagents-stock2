@@ -87,3 +87,61 @@ def merge_counts(dst, src):
         a = dst[k]
         for i in range(6):
             a[i] += v[i]
+
+
+import os, csv as _csv
+
+SIDE_CN = {"buy": "上涨前", "sell": "下跌前"}
+
+
+def _expand_params(plan, params):
+    if plan == "A":
+        N, ratio, band, f, s, sig = params
+        return {"N": N, "ratio": ratio, "band": band, "fast": f, "slow": s, "signal": sig}
+    periods, f, s, sig = params
+    return {"periods": "/".join(map(str, periods)), "fast": f, "slow": s, "signal": sig}
+
+
+def write_reports(rows, out_dir="/home/tdxback/report", ts=None, cover_min=0.70):
+    """已 finalize 的 rows → 按 (plan,side,pct) 分文件写 CSV + 一份横向对比 md。
+    rows 传全量 finalize 结果；本函数内部对每个 CSV 各自按 coverage 门槛筛+排序。"""
+    import time
+    ts = ts or time.strftime("%Y%m%d_%H%M%S")
+    os.makedirs(out_dir, exist_ok=True)
+    paths = []
+    groups = {}
+    for r in rows:
+        groups.setdefault((r["plan"], r["side"], r["pct"]), []).append(r)
+    md_lines = ["# 方案A/B 涨跌前期共性 横向对比", "", f"生成 {ts}，覆盖率门槛 {cover_min}", ""]
+    for (plan, side, pct), grp in sorted(groups.items()):
+        kept = filter_rank(grp, cover_min)
+        zz = f"zz{int(pct*100)}"
+        fname = f"方案{plan}_{SIDE_CN[side]}共性_{zz}_{ts}.csv"
+        fpath = os.path.join(out_dir, fname)
+        base_cols = ["plan", "side", "pct"]
+        pcols = (["N", "ratio", "band", "fast", "slow", "signal"] if plan == "A"
+                 else ["periods", "fast", "slow", "signal"])
+        metric_cols = ["seg_hit", "seg_total", "coverage", "rate_all", "lift", "precision"]
+        with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
+            w = _csv.writer(f)
+            w.writerow(base_cols + pcols + metric_cols)
+            for r in kept:
+                ep = _expand_params(plan, r["params"])
+                w.writerow([r["plan"], r["side"], r["pct"]] +
+                           [ep[c] for c in pcols] +
+                           [r[c] for c in metric_cols])
+        paths.append(fpath)
+        if kept:
+            top = kept[0]
+            ep = _expand_params(plan, top["params"])
+            md_lines.append(
+                f"- **方案{plan} {SIDE_CN[side]} {zz}**：最佳 {ep} → "
+                f"覆盖{top['coverage']:.2f} 提升度{top['lift']:.2f} 精确{top['precision']:.2f}"
+                f"（达标 {len(kept)} 组）")
+        else:
+            md_lines.append(f"- **方案{plan} {SIDE_CN[side]} {zz}**：无≥{cover_min}覆盖组合")
+    md_path = os.path.join(out_dir, f"方案AB_共性横向对比_{ts}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(md_lines) + "\n")
+    paths.append(md_path)
+    return paths
