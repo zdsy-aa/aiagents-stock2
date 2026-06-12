@@ -64,9 +64,33 @@ def test_accumulate_stock():
     print("OK accumulate_stock")
 
 
+def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
+    import os, glob, shutil
+    shutil.rmtree(tmpdir_path, ignore_errors=True)
+    os.makedirs(tmpdir_path, exist_ok=True)
+    rows = [
+        {"plan": "A", "side": "buy", "pct": 0.15, "params": (20, 0.618, 0.01, 12, 26, 9),
+         "seg_hit": 7, "seg_total": 10, "coverage": 0.7, "rate_all": 0.02,
+         "lift": 10.0, "precision": 0.4},
+        {"plan": "B", "side": "sell", "pct": 0.10, "params": ((3, 6, 12, 24), 12, 26, 9),
+         "seg_hit": 8, "seg_total": 10, "coverage": 0.8, "rate_all": 0.03,
+         "lift": 5.0, "precision": 0.3},
+    ]
+    paths = M.write_reports(rows, out_dir=tmpdir_path, ts="20260612_000000")
+    csvs = glob.glob(os.path.join(tmpdir_path, "*.csv"))
+    md = glob.glob(os.path.join(tmpdir_path, "*.md"))
+    assert len(csvs) >= 1 and len(md) == 1, (csvs, md)
+    # A买点榜应含 N/ratio/band/fast 展开列
+    head = open([p for p in csvs if "方案A" in p and "上涨前" in p][0],
+                encoding="utf-8-sig").readline()
+    assert "ratio" in head and "coverage" in head, head
+    print("OK write_reports")
+
+
 if __name__ == "__main__":
     test_count_for_signal()
     test_count_out_of_range_window()
     test_finalize_and_rank()
     test_accumulate_stock()
+    test_write_reports()
     print("ALL OK")
