@@ -41,14 +41,33 @@ def test_bbi_cross_up_down():
     print("OK bbi_cross")
 
 
+def test_bbi_above_below():
+    # 收上=状态(收盘在BBI上方即True,含突破后持续)；上穿=事件(仅突破当根)
+    c = [10, 10, 10, 10, 9, 9, 9.5, 11, 12]
+    df = _df(c, c, c, c)
+    ab = P.bbi_above(df, (2, 3, 4, 5))
+    be = P.bbi_below(df, (2, 3, 4, 5))
+    up = P.bbi_cross_up(df, (2, 3, 4, 5))
+    assert ab.dtype == bool and be.dtype == bool
+    assert (ab & be).sum() == 0                 # 上方/下方互斥
+    assert ab.sum() >= up.sum()                 # 状态命中数 ≥ 事件命中数
+    assert (up.fillna(False) & ~ab).sum() == 0  # 上穿当根必在BBI上方
+    print("OK bbi_above_below")
+
+
 def test_combiners_and_grids():
     c = [10, 9.5, 9, 9.2, 9.6, 10.2, 10.8, 11.5, 12.0, 12.5]
     df = _df(c, [x + 0.5 for x in c], [x - 0.5 for x in c], c)
     a = P.plan_a_signal(df, 4, 0.5, 0.02, 5, 10, 3, "buy")
-    b = P.plan_b_signal(df, (2, 3, 4, 5), 5, 10, 3, "buy")
-    assert a.dtype == bool and b.dtype == bool
+    b_cross = P.plan_b_signal(df, (2, 3, 4, 5), "cross", 5, 10, 3, "buy")
+    b_above = P.plan_b_signal(df, (2, 3, 4, 5), "above", 5, 10, 3, "buy")
+    assert a.dtype == bool and b_cross.dtype == bool and b_above.dtype == bool
+    # 收上(状态)与MACD组合的命中 ≥ 上穿(事件)与MACD组合
+    assert b_above.sum() >= b_cross.sum()
     assert len(P.PLAN_A_GRID) == 144, len(P.PLAN_A_GRID)
-    assert len(P.PLAN_B_GRID) == 12, len(P.PLAN_B_GRID)
+    assert len(P.PLAN_B_GRID) == 24, len(P.PLAN_B_GRID)   # 3周期×2形态×4MACD
+    forms = {p[1] for p in P.PLAN_B_GRID}
+    assert forms == {"cross", "above"}, forms
     print("OK combiners_grids")
 
 
@@ -56,5 +75,6 @@ if __name__ == "__main__":
     test_macd_golden_dead()
     test_fib_support_hold()
     test_bbi_cross_up_down()
+    test_bbi_above_below()
     test_combiners_and_grids()
     print("ALL OK")
