@@ -25,20 +25,20 @@ def count_for_signal(signal, windows):
     return seg_hit, seg_total, fires_pos, bars_pos, fires_all, bars_all
 
 
-# key = (plan, side, pct, paramtuple)；paramtuple: A=(N,ratio,band,f,s,sig) B=(periods,form,f,s,sig)
+# key = (group, plan, side, pct, paramtuple)；paramtuple: A=(N,ratio,band,f,s,sig) B=(periods,form,f,s,sig)
 def finalize(counts):
-    """counts(已跨股累加) → list[dict] 含 coverage/lift/precision 等。"""
+    """counts(已跨股累加,键含group) → list[dict] 含 group/coverage/lift/precision 等。"""
     rows = []
-    for (plan, side, pct, params), c in counts.items():
+    for (group, plan, side, pct, params), c in counts.items():
         seg_hit, seg_total, fires_pos, bars_pos, fires_all, bars_all = c
         coverage = seg_hit / seg_total if seg_total else 0.0
         rate_pos = fires_pos / bars_pos if bars_pos else 0.0
         rate_all = fires_all / bars_all if bars_all else 0.0
         lift = rate_pos / rate_all if rate_all > 0 else float("inf")
         precision = fires_pos / fires_all if fires_all else 0.0
-        rows.append({"plan": plan, "side": side, "pct": pct, "params": params,
-                     "seg_hit": seg_hit, "seg_total": seg_total,
-                     "coverage": coverage, "rate_all": rate_all,
+        rows.append({"group": group, "plan": plan, "side": side, "pct": pct,
+                     "params": params, "seg_hit": seg_hit, "seg_total": seg_total,
+                     "fires_all": fires_all, "coverage": coverage, "rate_all": rate_all,
                      "lift": lift, "precision": precision})
     return rows
 
@@ -192,11 +192,45 @@ def _write_board(fpath, plan, side, pct, ranked):
                        [ep[c] for c in pcols] + [r[c] for c in metric_cols])
 
 
+GROUP_MIN_SEG = 3000      # 组级样本门槛(seg_total)
+ROW_MIN_FIRES = 300       # 行级样本门槛(fires_all)
+DIM_PREFIX = ("板块=", "市值=", "波动率=")
+
+
+def attach_uplift(rows):
+    """给每行补 lift_all / uplift / uplift_ratio（基线=同(plan,side,pct,params)的ALL行lift）。"""
+    base = {}
+    for r in rows:
+        if r["group"] == "ALL":
+            base[(r["plan"], r["side"], r["pct"], r["params"])] = r["lift"]
+    out = []
+    for r in rows:
+        r = dict(r)
+        la = base.get((r["plan"], r["side"], r["pct"], r["params"]))
+        r["lift_all"] = la
+        if la is not None and la > 0 and r["lift"] != float("inf"):
+            r["uplift"] = r["lift"] - la
+            r["uplift_ratio"] = r["lift"] / la
+        else:
+            r["uplift"] = float("-inf")
+            r["uplift_ratio"] = 0.0
+        out.append(r)
+    return out
+
+
+def _dim_of(group):
+    for p in DIM_PREFIX:
+        if group.startswith(p):
+            return p.rstrip("=")
+    return None
+
+
 def write_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
                   cover_min=0.50, topn=30):
     """已 finalize 的 rows → 按 (plan,side,pct) 分文件写两类 CSV + 一份横向对比 md：
     - 达标主榜：覆盖率≥cover_min 硬门槛，按提升度降序(可能空)；
     - 最佳可达榜：不卡覆盖率(仅 rate_all>0)，按提升度降序取 Top topn(保证非空)。"""
+    rows = [r for r in rows if r["group"] == "ALL"]      # 全市场榜只用 ALL
     import time
     ts = ts or time.strftime("%Y%m%d_%H%M%S")
     os.makedirs(out_dir, exist_ok=True)
@@ -232,6 +266,58 @@ def write_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
     md_path = os.path.join(out_dir, f"方案AB_共性横向对比_{ts}.md")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md_lines) + "\n")
+    paths.append(md_path)
+    return paths
+
+
+def write_grouped_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
+                          topn=30, group_min_seg=GROUP_MIN_SEG, row_min_fires=ROW_MIN_FIRES):
+    """按维度(板块/市值/波动率)出 uplift 榜 CSV + 总览 md。基线=ALL同参 lift。"""
+    import time
+    ts = ts or time.strftime("%Y%m%d_%H%M%S")
+    os.makedirs(out_dir, exist_ok=True)
+    rows = attach_uplift(rows)
+    paths = []
+    md = ["# 分组挖掘总览(uplift vs 全市场)", "",
+          f"生成 {ts}；组级门槛 seg_total≥{group_min_seg}，行级 fires_all≥{row_min_fires}，每组Top{topn}",
+          "（uplift=组内lift−全市场同参lift；ratio=组内/全市场。⭐=ratio≥1.3 分组显著增强）", ""]
+    pcols_A = ["N", "ratio", "band", "fast", "slow", "signal"]
+    pcols_B = ["periods", "form", "fast", "slow", "signal"]
+    metric = ["seg_total", "coverage", "lift", "lift_all", "uplift", "uplift_ratio",
+              "precision", "fires_all"]
+    for dim in ("板块", "市值", "波动率"):
+        drows = [r for r in rows if _dim_of(r["group"]) == dim
+                 and r["seg_total"] >= group_min_seg and r["fires_all"] >= row_min_fires
+                 and r["uplift"] != float("-inf")]
+        drows.sort(key=lambda r: r["uplift"], reverse=True)
+        # 写 CSV(A/B 参数列不同,统一展开为字符串 params 列以避免混列)
+        fpath = os.path.join(out_dir, f"分组uplift榜_{dim}_{ts}.csv")
+        with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
+            w = _csv.writer(f)
+            w.writerow(["group", "plan", "side", "pct", "params"] + metric)
+            for r in drows[:topn * 12]:    # 每维度跨多组,放宽总条数
+                ep = _expand_params(r["plan"], r["params"])
+                w.writerow([r["group"], r["plan"], r["side"], r["pct"],
+                            ";".join(f"{k}={v}" for k, v in ep.items())]
+                           + [r.get(m) for m in metric])
+        paths.append(fpath)
+        # md: 每(组×side) 取 uplift 最高一条
+        best = {}
+        for r in drows:
+            key = (r["group"], r["side"])
+            if key not in best or r["uplift"] > best[key]["uplift"]:
+                best[key] = r
+        md.append(f"## 维度：{dim}")
+        for (grp, side), r in sorted(best.items()):
+            star = "⭐" if r["uplift_ratio"] >= 1.3 else ""
+            ep = _expand_params(r["plan"], r["params"])
+            md.append(f"- {star}**{grp} {SIDE_CN[side]}**：方案{r['plan']} {ep} "
+                      f"lift {r['lift']:.2f}(全市场{r['lift_all']:.2f}, +{r['uplift']:.2f}/{r['uplift_ratio']:.2f}×) "
+                      f"覆盖{r['coverage']:.2f} 样本{r['seg_total']}")
+        md.append("")
+    md_path = os.path.join(out_dir, f"分组挖掘总览_{ts}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(md) + "\n")
     paths.append(md_path)
     return paths
 
