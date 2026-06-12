@@ -48,3 +48,42 @@ def filter_rank(rows, cover_min=0.70):
     keep = [r for r in rows
             if r["seg_total"] > 0 and r["coverage"] >= cover_min and r["rate_all"] > 0]
     return sorted(keep, key=lambda r: r["lift"], reverse=True)
+
+
+import swing_samples as SW
+import param_signals as PS
+from collections import defaultdict
+
+DEFAULT_PCTS = (0.10, 0.15, 0.20)
+
+
+def accumulate_stock(df, pcts=DEFAULT_PCTS, W=5):
+    """单股 → 计数dict key=(plan,side,pct,params) val=[6元累计]。
+    df 需含 High/Low/Close 列、时间升序。"""
+    out = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
+    high = df["High"].tolist(); low = df["Low"].tolist()
+    for pct in pcts:
+        up_win, down_win = SW.positive_windows(high, low, pct, W)
+        for side, windows in (("buy", up_win), ("sell", down_win)):
+            if not windows:
+                continue
+            for params in PS.PLAN_A_GRID:
+                sig = PS.plan_a_signal(df, *params, side=side).to_numpy()
+                _merge(out[("A", side, pct, params)], count_for_signal(sig, windows))
+            for params in PS.PLAN_B_GRID:
+                sig = PS.plan_b_signal(df, *params, side=side).to_numpy()
+                _merge(out[("B", side, pct, params)], count_for_signal(sig, windows))
+    return dict(out)
+
+
+def _merge(acc, c):
+    for i in range(6):
+        acc[i] += c[i]
+
+
+def merge_counts(dst, src):
+    """跨股合并：把 src(单股dict) 累加进 dst(defaultdict)。"""
+    for k, v in src.items():
+        a = dst[k]
+        for i in range(6):
+            a[i] += v[i]
