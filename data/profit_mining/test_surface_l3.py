@@ -56,9 +56,58 @@ def test_marginal_inf_sentinel():
     print("OK marginal_inf_sentinel")
 
 
+def _scores_df():
+    base = {"条件内胜率": 0.6, "基线胜率": 0.4, "胜率增益": 0.2, "非盈利覆盖率": 0.1}
+    rows = [
+        # G 组 L2 子集
+        {"分组": "G", "方案": "a + b", "支持数": 200, "盈利覆盖率": 0.5, "提升度": 2.0, "层级": "L2", **base},
+        {"分组": "G", "方案": "a + c", "支持数": 200, "盈利覆盖率": 0.5, "提升度": 3.0, "层级": "L2", **base},
+        {"分组": "G", "方案": "b + c", "支持数": 200, "盈利覆盖率": 0.5, "提升度": 1.5, "层级": "L2", **base},
+        # 达标 L3
+        {"分组": "G", "方案": "a + b + c", "支持数": 150, "盈利覆盖率": 0.30, "提升度": 3.5, "层级": "L3", **base},
+        # 支持不足(99<100) 应被剔
+        {"分组": "G", "方案": "a + b + d", "支持数": 99, "盈利覆盖率": 0.30, "提升度": 9.0, "层级": "L3", **base},
+        # 覆盖不足(0.19<0.20) 应被剔
+        {"分组": "G", "方案": "a + c + e", "支持数": 200, "盈利覆盖率": 0.19, "提升度": 9.0, "层级": "L3", **base},
+        # 边界: 支持=100 覆盖=0.20 应保留
+        {"分组": "G", "方案": "b + c + f", "支持数": 100, "盈利覆盖率": 0.20, "提升度": 1.0, "层级": "L3", **base},
+    ]
+    return pd.DataFrame(rows)
+
+
+def test_surface():
+    board = S.surface(_scores_df(), support_min=100, cover_min=0.20, topn=15)
+    # 仅 a+b+c 与 b+c+f 达标; 按提升度降序 → a+b+c(3.5) 在前
+    assert list(board["方案"]) == ["a + b + c", "b + c + f"], list(board["方案"])
+    r0 = board.iloc[0]
+    assert abs(r0["增量提升度"] - 0.5) < 1e-9, r0["增量提升度"]   # 3.5 - max(2,3,1.5)=3.0
+    assert frozenset(S.split_conditions(r0["最优两两子集"])) == frozenset(("a", "c"))
+    # 输出列齐全且顺序正确
+    assert list(board.columns) == ["分组", "方案", "支持数", "盈利覆盖率", "条件内胜率",
+                                   "基线胜率", "胜率增益", "提升度", "最优两两子集",
+                                   "子集提升度", "增量提升度"], list(board.columns)
+    print("OK surface")
+
+
+def test_surface_topn():
+    # 同组 20 条达标 L3 → Top15 截断
+    base = {"条件内胜率": 0.6, "基线胜率": 0.4, "胜率增益": 0.2, "非盈利覆盖率": 0.1}
+    rows = [{"分组": "H", "方案": "x + y", "支持数": 300, "盈利覆盖率": 0.5,
+             "提升度": 5.0, "层级": "L2", **base}]
+    for i in range(20):
+        rows.append({"分组": "H", "方案": f"x + y + z{i}", "支持数": 200,
+                     "盈利覆盖率": 0.30, "提升度": float(i), "层级": "L3", **base})
+    board = S.surface(pd.DataFrame(rows), support_min=100, cover_min=0.20, topn=15)
+    assert len(board) == 15, len(board)
+    assert board["提升度"].iloc[0] == 19.0      # 降序,最高在前
+    print("OK surface_topn")
+
+
 if __name__ == "__main__":
     test_split_conditions()
     test_load_scores()
     test_build_pair_lift_and_marginal()
     test_marginal_inf_sentinel()
+    test_surface()
+    test_surface_topn()
     print("ALL OK")
