@@ -85,17 +85,7 @@ def render_html(rows):
     nSel = sum(1 for r in rows if r.get("精选"))
     nZ = sum(1 for r in rows if r.get("资金确认"))
     nZS = sum(1 for r in rows if r.get("中枢底部"))
-    core = [r for r in rows if r.get("精选") == "★★核心"]
-    sel = [r for r in rows if r.get("精选") == "★精选"]
-    rest = [r for r in rows if not r.get("精选")]
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    def section(title, sub, rs):
-        if not rs:
-            return ""
-        return (f'<h3 style="margin:22px 0 8px;color:#4a3a1a;font-size:16px;">{title}'
-                f'<span style="font-weight:400;color:#998;font-size:13px;"> {sub}</span></h3>'
-                + _table(rs))
 
     summary = (
         f'<div style="background:#f6f1e4;border-left:4px solid #c9a84a;padding:12px 16px;'
@@ -134,11 +124,7 @@ def render_html(rows):
     body = (f'<div style="max-width:920px;margin:0 auto;padding:16px;color:#333;">'
             f'<h2 style="color:#3a2e15;border-bottom:2px solid #c9a84a;padding-bottom:8px;">'
             f'🛡️ 每日稳定选股清单</h2>'
-            f'{summary}'
-            f'{section("★★ 核心精选", f"({nCore}只 · 1买+非陷阱+量能金叉，优先关注)", core)}'
-            f'{section("★ 精选", f"({len(sel)}只 · 1买+非陷阱)", sel)}'
-            f'{section("其余命中", f"({len(rest)}只 · 满足A∪B但非1买精选层)", rest)}'
-            f'{logic}{discipline}{note}</div>')
+            f'{summary}{logic}{discipline}{note}</div>')
     return body, scan, len(rows), nSel, nCore
 
 
@@ -166,9 +152,14 @@ def main():
         print("清单为空，跳过推送", file=sys.stderr); sys.exit(1)
     body, scan, n, nSel, nCore = render_html(rows)
     md_text = EXP.render_md(rows)[0]        # 附件:同内容 Markdown 文档
-    xlsx_bytes = None                       # 附件:同内容 Excel 文档(openpyxl 缺失则降级跳过)
+    xlsx_bytes = None                       # 附件:当天累计多 sheet Excel(openpyxl 缺失则降级跳过)
     try:
-        xlsx_bytes = XLS.build_xlsx_bytes(rows)
+        intraday_dir, eod_csv = XLS.resolve_data_paths(csv_path)
+        slots = XLS.collect_today_slots(scan, include_eod=(slot is None),
+                                        intraday_dir=intraday_dir, eod_csv=eod_csv)
+        if not slots:                       # 兜底:当天暂无时段 CSV → 当前批单 sheet
+            slots = [((slot.replace(":", "：") if slot else "盘后"), rows)]
+        xlsx_bytes = XLS.build_xlsx_bytes_multi(slots)
     except Exception as e:
         print(f"⚠ 生成 Excel 附件失败(本次只附 md): {e}", file=sys.stderr)
     if slot:
@@ -222,13 +213,13 @@ def main():
     msg.attach(MIMEText(body, "html", "utf-8"))
     att = MIMEApplication(md_text.encode("utf-8"), _subtype="markdown")
     att.add_header("Content-Disposition", "attachment",
-                   filename=("utf-8", "", f"每日稳定选股清单_{scan}.md"))
+                   filename=("utf-8", "", f"每日稳定选股_{scan}.md"))
     msg.attach(att)
     if xlsx_bytes:                          # Excel 附件(xlsx)
         xatt = MIMEApplication(
             xlsx_bytes, _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         xatt.add_header("Content-Disposition", "attachment",
-                        filename=("utf-8", "", f"每日稳定选股清单_{scan}.xlsx"))
+                        filename=("utf-8", "", f"每日稳定选股_{scan}.xlsx"))
         msg.attach(xatt)
 
     ctx = ssl.create_default_context()
