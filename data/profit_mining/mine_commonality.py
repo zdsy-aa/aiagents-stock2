@@ -57,22 +57,82 @@ from collections import defaultdict
 DEFAULT_PCTS = (0.10, 0.15, 0.20)
 
 
+def _win_arrays(windows, n):
+    """连续整数窗口 list → (starts, ends) numpy 数组(int64,含端,均在[0,n))。
+    同侧 zigzag 窗口互不相交，故 union 计数可按窗口求和不会重复。"""
+    st = np.fromiter((w[0] for w in windows), dtype=np.int64, count=len(windows))
+    en = np.fromiter((w[-1] for w in windows), dtype=np.int64, count=len(windows))
+    np.clip(st, 0, n - 1, out=st); np.clip(en, 0, n - 1, out=en)
+    return st, en
+
+
 def accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4):
-    """单股 → 计数dict key=(plan,side,pct,params) val=[6元累计]。
-    df 需含 High/Low/Close 列、时间升序。正样本=拐点后 fwd 根(起涨/起跌初期)。"""
+    """单股 → 计数dict key=(plan,side,pct,params) val=[6元累计]。大网格优化版：
+    1) 分量缓存：信号=分量&MACD；MACD只依赖(f,s,sig)、fib只依赖(N,r,b)、bbi只依赖
+       (periods,form)，各只算一次再做布尔AND，pandas计算从~7200次降到~260次/股。
+    2) 向量化计数：窗口仅依赖(side,pct)且为不相交连续区间，用累积和O(1)取每窗命中，
+       替代原 count_for_signal 的逐窗 python 循环。
+    结果与 plan_a/b_signal + count_for_signal 数值完全一致(见 test)。"""
     out = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
+    n = len(df)
     high = df["High"].tolist(); low = df["Low"].tolist()
+    # 窗口结构 per (side,pct): (starts, ends, seg_total, bars_pos)；无窗口=None(不建key,与原逻辑一致)
+    W = {}
     for pct in pcts:
-        up_win, down_win = SW.positive_windows(high, low, pct, fwd)
-        for side, windows in (("buy", up_win), ("sell", down_win)):
-            if not windows:
-                continue
-            for params in PS.PLAN_A_GRID:
-                sig = PS.plan_a_signal(df, *params, side=side).to_numpy()
-                _merge(out[("A", side, pct, params)], count_for_signal(sig, windows))
-            for params in PS.PLAN_B_GRID:
-                sig = PS.plan_b_signal(df, *params, side=side).to_numpy()
-                _merge(out[("B", side, pct, params)], count_for_signal(sig, windows))
+        up, down = SW.positive_windows(high, low, pct, fwd)
+        for side, wins in (("buy", up), ("sell", down)):
+            if wins:
+                st, en = _win_arrays(wins, n)
+                W[(side, pct)] = (st, en, len(wins), int((en - st + 1).sum()))
+            else:
+                W[(side, pct)] = None
+
+    for side in ("buy", "sell"):
+        active = [pct for pct in pcts if W[(side, pct)] is not None]
+        if not active:
+            continue
+        macd_cache, fib_cache, bbi_cache = {}, {}, {}
+
+        def macd_mask(f, s, sg):
+            m = macd_cache.get((f, s, sg))
+            if m is None:
+                m = (PS.macd_golden(df, f, s, sg) if side == "buy"
+                     else PS.macd_dead(df, f, s, sg)).to_numpy()
+                macd_cache[(f, s, sg)] = m
+            return m
+
+        def fib_mask(N, r, b):
+            m = fib_cache.get((N, r, b))
+            if m is None:
+                m = (PS.fib_support_hold(df, N, r, b) if side == "buy"
+                     else PS.fib_resist_reject(df, N, r, b)).to_numpy()
+                fib_cache[(N, r, b)] = m
+            return m
+
+        def bbi_mask(periods, form):
+            m = bbi_cache.get((periods, form))
+            if m is None:
+                m = PS._bbi_form(df, periods, form, side).to_numpy()
+                bbi_cache[(periods, form)] = m
+            return m
+
+        def tally(plan, params, sig):
+            csum = np.concatenate(([0], np.cumsum(sig, dtype=np.int64)))  # 只算一次,跨pct复用
+            fires_all = int(sig.sum())
+            for pct in active:
+                st, en, seg_total, bars_pos = W[(side, pct)]
+                wf = csum[en + 1] - csum[st]                  # 每窗命中根数(区间和)
+                a = out[(plan, side, pct, params)]
+                a[0] += int(np.count_nonzero(wf)); a[1] += seg_total
+                a[2] += int(wf.sum()); a[3] += bars_pos
+                a[4] += fires_all; a[5] += n
+
+        for params in PS.PLAN_A_GRID:
+            N, r, b, f, s, sg = params
+            tally("A", params, fib_mask(N, r, b) & macd_mask(f, s, sg))
+        for params in PS.PLAN_B_GRID:
+            periods, form, f, s, sg = params
+            tally("B", params, bbi_mask(periods, form) & macd_mask(f, s, sg))
     return dict(out)
 
 
@@ -118,7 +178,7 @@ def _write_board(fpath, plan, side, pct, ranked):
 
 
 def write_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
-                  cover_min=0.70, topn=20):
+                  cover_min=0.50, topn=30):
     """已 finalize 的 rows → 按 (plan,side,pct) 分文件写两类 CSV + 一份横向对比 md：
     - 达标主榜：覆盖率≥cover_min 硬门槛，按提升度降序(可能空)；
     - 最佳可达榜：不卡覆盖率(仅 rate_all>0)，按提升度降序取 Top topn(保证非空)。"""
