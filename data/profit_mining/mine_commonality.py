@@ -145,3 +145,58 @@ def write_reports(rows, out_dir="/home/tdxback/report", ts=None, cover_min=0.70)
         f.write("\n".join(md_lines) + "\n")
     paths.append(md_path)
     return paths
+
+
+def _load_kline(code):
+    """容器内本地K源 → 标准列 df（时间升序）。复用 build_features_v2 同款读取。"""
+    from akshare_gateway import akshare_gw
+    df = akshare_gw.local.get_kline(code, kline_type="day", limit=10000)
+    if df is None or df.empty:
+        return None
+    rename = {"开盘": "Open", "最高": "High", "最低": "Low", "收盘": "Close", "成交量": "Volume"}
+    return (df.rename(columns=rename).set_index("日期").sort_index()
+            [["Open", "High", "Low", "Close", "Volume"]])
+
+
+def _universe():
+    """股票池：events_labeled.csv 去重股票代码（≈全A历史，已证可加载）。"""
+    import csv as c2
+    path = "/app/data/profit_mining/events_labeled.csv"
+    codes = set()
+    with open(path, encoding="utf-8-sig") as f:
+        for r in c2.DictReader(f):
+            codes.add(r["股票代码"])
+    return sorted(codes)
+
+
+def _proc(code):
+    df = _load_kline(code)
+    if df is None or len(df) < 80:
+        return {}
+    return accumulate_stock(df, pcts=DEFAULT_PCTS, W=5)
+
+
+def main():
+    import sys, time, os
+    from multiprocessing import Pool
+    codes = _universe()
+    limit = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    if limit:
+        codes = codes[:limit]
+    total = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
+    t0 = time.time()
+    nproc = int(os.getenv("NPROC", "8"))
+    with Pool(nproc) as p:
+        for k, sc in enumerate(p.imap_unordered(_proc, codes, chunksize=20), 1):
+            merge_counts(total, sc)
+            if k % 500 == 0:
+                print(f"  …{k}/{len(codes)}，{int(time.time()-t0)}s", flush=True)
+    rows = finalize(dict(total))
+    paths = write_reports(rows, out_dir="/app/report")
+    print(f"[共性挖掘] 股票{len(codes)} 组合keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
+    for pth in paths:
+        print("  写", pth, flush=True)
+
+
+if __name__ == "__main__":
+    main()
