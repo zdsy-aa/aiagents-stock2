@@ -75,6 +75,24 @@ def test_extract_mktcap_missing_col():
         print("OK extract_mktcap_missing_col")
 
 
+def test_terciles():
+    import calibrate_buckets as CB
+    vals = list(range(1, 100))            # 1..99
+    c1, c2 = CB.terciles(vals)
+    assert 32 <= c1 <= 35, c1            # ~33 分位
+    assert 65 <= c2 <= 68, c2            # ~66 分位
+    print("OK terciles")
+
+
+def test_terciles_empty():
+    import calibrate_buckets as CB
+    try:
+        CB.terciles([])
+        assert False
+    except ValueError:
+        print("OK terciles_empty")
+
+
 if __name__ == "__main__":
     test_bucketize()
     test_board_group()
@@ -83,4 +101,6 @@ if __name__ == "__main__":
     test_split_windows_by_vol()
     test_extract_mktcap()
     test_extract_mktcap_missing_col()
+    test_terciles()
+    test_terciles_empty()
     print("ALL OK")
