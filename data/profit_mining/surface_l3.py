@@ -19,3 +19,37 @@ def load_scores(path):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
+
+
+def build_pair_lift(l2_df):
+    """单组 L2 行 → {frozenset({条件x,条件y}): 提升度}。用集合做键,无视存储顺序。"""
+    d = {}
+    for _, r in l2_df.iterrows():
+        names = split_conditions(r["方案"])
+        if len(names) == 2:
+            d[frozenset(names)] = r["提升度"]
+    return d
+
+
+def l3_marginal(plan_str, l3_lift, pair_lift):
+    """L3 三元组 → (最优两两子集 str, 子集提升度, 增量提升度)。
+    增量 = L3提升度 − 三个两两子集中提升度最高者。提升度 999 视为 inf 哨兵。"""
+    names = split_conditions(plan_str)
+    pairs = [(names[0], names[1]), (names[0], names[2]), (names[1], names[2])]
+    best_pair, best_lift = None, float("-inf")
+    for x, y in pairs:
+        lift = pair_lift.get(frozenset((x, y)))
+        if lift is None:
+            continue
+        if lift > best_lift:
+            best_lift, best_pair = lift, (x, y)
+    if best_pair is None:
+        return ("", float("nan"), float("nan"))
+    subset_str = f"{best_pair[0]} + {best_pair[1]}"
+    if l3_lift >= 999:
+        inc = float("inf")
+    elif best_lift >= 999:
+        inc = float("-inf")
+    else:
+        inc = l3_lift - best_lift
+    return (subset_str, best_lift, inc)
