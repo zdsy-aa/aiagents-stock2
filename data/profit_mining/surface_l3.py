@@ -104,3 +104,27 @@ def write_outputs(board, out_dir, ts):
         L.append("")
     open(md_path, "w", encoding="utf-8").write("\n".join(L))
     return [csv_path, md_path]
+
+
+def main():
+    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    if arg:
+        path = arg
+    else:
+        cands = sorted(glob.glob("/home/tdxback/report/各组方案_全部评分_*.csv"))
+        if not cands:
+            print("找不到 各组方案_全部评分_*.csv，请先跑 mine_combos_v2.py"); sys.exit(1)
+        path = cands[-1]
+    df = load_scores(path)
+    if int((df["层级"] == "L3").sum()) == 0:
+        print(f"{os.path.basename(path)} 无 L3 行"); sys.exit(1)
+    board = surface(df)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    paths = write_outputs(board, "/home/tdxback/report", ts)
+    print(f"[L3榜] {len(board)} 行（源 {os.path.basename(path)}）")
+    for p in paths:
+        print("  写", p)
+
+
+if __name__ == "__main__":
+    main()
