@@ -1,7 +1,16 @@
-# param_signals.py —— 方案A/B 参数化信号。复用 features.py 的 EMA/MA/HHV/LLV。
-import os, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import features as F   # MA/EMA/HHV/LLV 纯pandas，本地可import
+# param_signals.py —— 方案A/B 参数化信号。自含 EMA/MA/HHV/LLV(与 features.py 同式,避免依赖未入库文件)。
+
+
+# ---- 纯pandas基础指标(与 features.py 定义逐字一致,保证结果一致) ----
+class F:
+    @staticmethod
+    def MA(x, n):  return x.rolling(n, min_periods=n).mean()
+    @staticmethod
+    def EMA(x, n): return x.ewm(span=n, adjust=False).mean()
+    @staticmethod
+    def HHV(x, n): return x.rolling(n, min_periods=1).max()
+    @staticmethod
+    def LLV(x, n): return x.rolling(n, min_periods=1).min()
 
 
 # ---- MACD ----
