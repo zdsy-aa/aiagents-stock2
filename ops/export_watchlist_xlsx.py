@@ -199,9 +199,14 @@ def main():
     if not rows:
         print("清单为空", file=sys.stderr); sys.exit(1)
     scan = rows[0].get("扫描日期", "")
+    intraday_dir, eod_csv = resolve_data_paths(csv_path)
+    slots = collect_today_slots(scan, include_eod=True,
+                                intraday_dir=intraday_dir, eod_csv=eod_csv)
+    if not slots:
+        slots = [("盘后", rows)]   # 兜底：当天无任何时段 CSV
     if out is None:
-        out = os.path.join(os.path.dirname(csv_path), f"每日稳定选股清单_{scan}.xlsx")
-    wb = build_workbook(rows)
+        out = os.path.join(os.path.dirname(csv_path), f"每日稳定选股_{scan}.xlsx")
+    wb = build_multi_sheet_workbook(slots)
     wb.save(out)
     nSel = sum(1 for r in rows if r.get("精选"))
     nCore = sum(1 for r in rows if r.get("精选") == "★★核心")
