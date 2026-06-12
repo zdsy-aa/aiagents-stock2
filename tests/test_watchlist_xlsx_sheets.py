@@ -70,3 +70,16 @@ def test_resolve_data_paths_profit_mining():
     intra2, eod2 = XLS.resolve_data_paths("/app/data/profit_mining/每日自选股清单.csv")
     assert intra2 == "/app/data/profit_mining/watchlist_history/intraday"
     assert eod2 == "/app/data/profit_mining/每日自选股清单.csv"
+
+
+def test_render_html_drops_detail_tables():
+    import importlib
+    sys.path.insert(0, os.path.join(ROOT, "ops"))
+    PW = importlib.import_module("push_watchlist")
+    rows = [{"扫描日期": "2026-06-12", "股票代码": "000001", "股票名称": "测试股",
+             "命中规则": "A", "精选": "★★核心"}]
+    body, scan, n, nSel, nCore = PW.render_html(rows)
+    assert "其余命中" not in body          # 三档明细 section 标题已移除
+    assert "★★ 核心精选" not in body
+    assert "选股逻辑" in body and "操作纪律" in body   # 摘要/逻辑/纪律仍在
+    assert scan == "2026-06-12" and n == 1
