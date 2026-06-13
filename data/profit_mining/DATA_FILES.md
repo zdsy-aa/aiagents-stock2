@@ -26,11 +26,13 @@
 | `turnover_signal.csv` | turnover_features.py | 多处(7) | 换手率衍生信号 |
 | `forward_stats.csv` | build_forward_stats.py | 回测/统计 | 前向收益统计 |
 | `scores_all_combos.csv` | mine_combos.py | walk_forward.py | L1/L2/L3 组合全量评分 |
+| `setup_panel.npz` | setup_modeling.py build_panel | setup_modeling.py main | 起涨预测面板(全市场逐bar 21特征+y_fwd/y_zz+日期,可重建) |
 
 > 报告产物(commonality_reports/，按时间戳归档，保留)：
 > - mine_commonality.py → `方案AB_共性横向对比_*.md` + `方案{A/B}_{上涨前/下跌前}{共性/最佳可达}_zz{6/10/15/20}_*.csv` + 分组榜（拐点后[L,L+4]变体）
 > - mine_presetup.py → `起涨前蓄势_横向对比_*.md` + `方案{A/B}_起涨前蓄势{,最佳可达}_zz6_*.csv`（起涨前蓄势窗口×动量信号变体）
 > - mine_setup_commonality.py → `蓄势特征_横向对比_*.md` + `蓄势特征_{共性,最佳可达}_zz6_*.csv`（起涨前蓄势窗口×蓄势期特征 L1/L2 变体）
+> - setup_modeling.py → `起涨打分模型_评估_*.md`(逐bar多因子 logistic/GBDT 预测起涨,OOS AUC/lift;y_fwd真edge AUC~0.63,y_zz对照)
 > - 紧窗口变体: mine_presetup.py / mine_setup_commonality.py 支持 `TIGHT_K` env(=K)→窗口改为[L-K,L],产物名加 `_tightK{K}`(默认不设=自适应)
 
 ## 标定/产物 JSON（固化阈值，前台/调度读取）
