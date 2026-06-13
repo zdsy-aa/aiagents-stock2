@@ -1,7 +1,7 @@
 # mine_presetup.py —— 起涨前蓄势窗口共性挖掘(buy向/仅zz6)。
 # 窗口=每个>=6%上涨段起涨前的蓄势期(近=上一涨段+下降段/远=前7天,含波谷L)。
 # 段级覆盖率: 窗口内任一bar触发即该段命中。复用 mine_commonality 的 finalize/写榜。
-import os, sys, csv as _csv, time
+import os, sys, time
 from collections import defaultdict
 import numpy as np
 
@@ -42,7 +42,7 @@ def accumulate_presetup(df, pct=PCT, near_n=NEAR_N, far=FAR):
         fires_all = int(sig.sum())
         wf = csum[en + 1] - csum[st]            # 每窗口命中bar数
         seg_hit = int(np.count_nonzero(wf)); fires_pos = int(wf.sum())
-        bars_pos = int((en - st + 1).sum())     # 近窗口可能重叠,bars_pos为窗口求和(lift近似,coverage精确)
+        bars_pos = int((en - st + 1).sum())     # 近窗口"按构造"会与上一段窗口重叠,bars_pos/fires_pos按窗口求和(共享bar重复计)→lift为近似;coverage(seg级)不受影响,精确
         a = out[("ALL", plan, "buy", pct, params)]
         a[0] += seg_hit; a[1] += seg_total; a[2] += fires_pos
         a[3] += bars_pos; a[4] += fires_all; a[5] += n
