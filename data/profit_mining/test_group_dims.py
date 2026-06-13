@@ -93,6 +93,21 @@ def test_terciles_empty():
         print("OK terciles_empty")
 
 
+def test_industry_group():
+    assert GD.industry_group("C39计算机") == "行业=C39计算机"
+    assert GD.industry_group("") is None
+    assert GD.industry_group(None) is None
+    print("OK industry_group")
+
+
+def test_surviving_industries():
+    imap = {"600000": "金融", "600001": "金融", "600002": "金融",
+            "000001": "地产", "000002": "地产"}
+    assert GD.surviving_industries(imap, min_count=3) == {"金融"}
+    assert GD.surviving_industries(imap, min_count=2) == {"金融", "地产"}
+    print("OK surviving_industries")
+
+
 if __name__ == "__main__":
     test_bucketize()
     test_board_group()
@@ -103,4 +118,6 @@ if __name__ == "__main__":
     test_extract_mktcap_missing_col()
     test_terciles()
     test_terciles_empty()
+    test_industry_group()
+    test_surviving_industries()
     print("ALL OK")
