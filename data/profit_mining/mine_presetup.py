@@ -112,3 +112,39 @@ def write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=Non
         f.write("\n".join(summary) + "\n")
     paths.append(md_path)
     return paths
+
+
+def _proc(code):
+    try:
+        df = _load_kline(code)
+        if df is None or len(df) < 60:
+            return {}
+        return accumulate_presetup(df)
+    except Exception:
+        return {}
+
+
+def main():
+    from multiprocessing import Pool
+    t0 = time.time()
+    limit = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    codes = _universe()
+    if limit:
+        codes = codes[:limit]
+    nproc = int(os.getenv("NPROC", "8"))
+    acc = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
+    with Pool(nproc) as p:
+        for k, c in enumerate(p.imap_unordered(_proc, codes, chunksize=8), 1):
+            merge_counts(acc, c)
+            if k % 500 == 0:
+                print(f"  …{k}/{len(codes)}，{int(time.time()-t0)}s", flush=True)
+    rows = finalize(acc)
+    run_ts = time.strftime("%Y%m%d_%H%M%S")
+    paths = write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)
+    print(f"[起涨前蓄势] 股票{len(codes)} 组合keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
+    for pth in paths:
+        print("  写", pth, flush=True)
+
+
+if __name__ == "__main__":
+    main()
