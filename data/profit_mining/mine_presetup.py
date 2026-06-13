@@ -13,6 +13,7 @@ from mine_commonality import (finalize, filter_rank, _write_board, _expand_param
 PCT = 0.06
 NEAR_N = 20
 FAR = 7
+TIGHT_K = int(os.getenv("TIGHT_K")) if os.getenv("TIGHT_K") else None
 
 
 def _win_arrays(windows, n):
@@ -22,7 +23,7 @@ def _win_arrays(windows, n):
     return st, en
 
 
-def accumulate_presetup(df, pct=PCT, near_n=NEAR_N, far=FAR):
+def accumulate_presetup(df, pct=PCT, near_n=NEAR_N, far=FAR, tight_k=None):
     """单股 -> counts dict key=("ALL",plan,"buy",pct,params) val=[seg_hit,seg_total,
     fires_pos,bars_pos,fires_all,n]。窗口=presetup(buy向)。"""
     out = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
@@ -30,7 +31,7 @@ def accumulate_presetup(df, pct=PCT, near_n=NEAR_N, far=FAR):
     if n == 0:
         return dict(out)
     piv = SW.Z.zigzag_pivots(df["High"].tolist(), df["Low"].tolist(), pct)
-    wins = SW.presetup_windows_from_pivots(piv, near_n, far)
+    wins = SW.presetup_windows_from_pivots(piv, near_n, far, tight_k=tight_k)
     if not wins:
         return dict(out)
     st, en = _win_arrays(wins, n)
@@ -76,7 +77,7 @@ def merge_counts(dst, src):
 
 
 def write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
-                           cover_min=0.50, topn=30):
+                           cover_min=0.50, topn=30, suffix=""):
     """rows(finalize后,仅group=ALL/buy/zz6) -> 每方案两类CSV + 横向对比md。"""
     ts = ts or time.strftime("%Y%m%d_%H%M%S")
     os.makedirs(out_dir, exist_ok=True)
@@ -86,12 +87,12 @@ def write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=Non
         sub = [r for r in rows if r["plan"] == plan]
         # 主榜: coverage>=门槛
         main = filter_rank(sub, cover_min=cover_min)
-        main_path = os.path.join(out_dir, f"方案{plan}_起涨前蓄势_zz6_{ts}.csv")
+        main_path = os.path.join(out_dir, f"方案{plan}_起涨前蓄势_zz6{suffix}_{ts}.csv")
         _write_board(main_path, plan, "buy", PCT, main); paths.append(main_path)
         # 最佳可达: 不卡覆盖率,按lift取Top
         best = sorted([r for r in sub if r["rate_all"] > 0 and r["lift"] != float("inf")],
                       key=lambda r: r["lift"], reverse=True)[:topn]
-        best_path = os.path.join(out_dir, f"方案{plan}_起涨前蓄势最佳可达_zz6_{ts}.csv")
+        best_path = os.path.join(out_dir, f"方案{plan}_起涨前蓄势最佳可达_zz6{suffix}_{ts}.csv")
         _write_board(best_path, plan, "buy", PCT, best); paths.append(best_path)
         if main:
             b = main[0]
@@ -105,7 +106,7 @@ def write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=Non
                            f"提升度{b['lift']:.2f} 精确{b['precision']:.2f}")
         else:
             summary.append(f"- **方案{plan} 起涨前蓄势 zz6**：无数据")
-    md_path = os.path.join(out_dir, f"起涨前蓄势_横向对比_{ts}.md")
+    md_path = os.path.join(out_dir, f"起涨前蓄势_横向对比{suffix}_{ts}.md")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(f"# 起涨前蓄势窗口共性 横向对比\n\n生成 {ts}，zz6，buy向，覆盖率门槛 {cover_min}，"
                 f"近窗口=上一涨段+下降段(gap≤{NEAR_N})/远窗口=前{FAR}天(均含波谷L)\n\n")
@@ -119,7 +120,7 @@ def _proc(code):
         df = _load_kline(code)
         if df is None or len(df) < 60:
             return {}
-        return accumulate_presetup(df)
+        return accumulate_presetup(df, tight_k=TIGHT_K)
     except Exception:
         return {}
 
@@ -127,6 +128,7 @@ def _proc(code):
 def main():
     from multiprocessing import Pool
     t0 = time.time()
+    print(f"  窗口模式: {'紧窗口 K='+str(TIGHT_K) if TIGHT_K else '自适应'}", flush=True)
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     codes = _universe()
     if limit:
@@ -140,7 +142,8 @@ def main():
                 print(f"  …{k}/{len(codes)}，{int(time.time()-t0)}s", flush=True)
     rows = finalize(acc)
     run_ts = time.strftime("%Y%m%d_%H%M%S")
-    paths = write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)
+    suffix = f"_tightK{TIGHT_K}" if TIGHT_K else ""
+    paths = write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts, suffix=suffix)
     print(f"[起涨前蓄势] 股票{len(codes)} 组合keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
     for pth in paths:
         print("  写", pth, flush=True)
