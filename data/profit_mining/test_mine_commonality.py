@@ -164,6 +164,38 @@ def test_write_reports(tmpdir_path="/tmp/mc_test_out"):
     print("OK write_reports")
 
 
+def _synth_df_ind(n=300, seed=1):
+    import pandas as pd, numpy as np
+    rng = np.random.default_rng(seed)
+    close = 100 + np.cumsum(rng.normal(0, 1, n))
+    high = close + np.abs(rng.normal(0, 0.5, n))
+    low = close - np.abs(rng.normal(0, 0.5, n))
+    return pd.DataFrame({"Open": close, "High": high, "Low": low,
+                         "Close": close, "Volume": rng.integers(1e5, 1e6, n)})
+
+
+def test_accumulate_stock_industry():
+    df = _synth_df_ind()
+    out = M.accumulate_stock(df, groups={"board": None, "size": None,
+                                         "vol_cuts": None, "industry": "行业=测试业"})
+    ind_keys = [k for k in out if k[0] == "行业=测试业"]
+    assert ind_keys, "应出现 行业=测试业 的 key"
+    # 单股全归该行业 → 行业组 seg_hit == 同参 ALL seg_hit（≤ 的等号情形）
+    for k in ind_keys:
+        allk = ("ALL",) + k[1:]
+        assert out[k][0] == out[allk][0], (k, out[k], out[allk])
+    # industry=None 不产行业组
+    out2 = M.accumulate_stock(df, groups={"board": None, "size": None,
+                                          "vol_cuts": None, "industry": None})
+    assert not any(k[0].startswith("行业=") for k in out2)
+    print("OK accumulate_stock_industry")
+
+
+def test_dim_of_industry():
+    assert M._dim_of("行业=C39计算机") == "行业"
+    print("OK dim_of_industry")
+
+
 if __name__ == "__main__":
     test_count_for_signal()
     test_count_out_of_range_window()
@@ -173,4 +205,6 @@ if __name__ == "__main__":
     test_accumulate_stock_grouped_conservation()
     test_accumulate_stock_no_groups_only_all()
     test_write_reports()
+    test_accumulate_stock_industry()
+    test_dim_of_industry()
     print("ALL OK")

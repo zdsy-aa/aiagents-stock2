@@ -82,6 +82,8 @@ def accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4, groups=None):
             shared.append(groups["board"])
         if groups.get("size"):
             shared.append(groups["size"])
+        if groups.get("industry"):
+            shared.append(groups["industry"])
     vol_cuts = groups.get("vol_cuts") if groups else None
     vol20 = GD.vol20_series(df) if vol_cuts else None
 
@@ -195,7 +197,7 @@ def _write_board(fpath, plan, side, pct, ranked):
 
 GROUP_MIN_SEG = 3000      # 组级样本门槛(seg_total)
 ROW_MIN_FIRES = 300       # 行级样本门槛(fires_all)
-DIM_PREFIX = ("板块=", "市值=", "波动率=")
+DIM_PREFIX = ("板块=", "市值=", "波动率=", "行业=")
 
 
 def attach_uplift(rows):
@@ -374,6 +376,18 @@ def _group_ctx():
                     mktcap_map[r["代码"]] = float(r["总市值"])
                 except (ValueError, KeyError):
                     pass
+    # 行业图(+≥30门槛): 仅保留股票数≥30的行业,小行业的股票→None
+    industry_map = {}
+    ipath = "/app/data/profit_mining/stock_industry_snapshot.csv"
+    if os.path.exists(ipath):
+        raw = {}
+        with open(ipath, encoding="utf-8-sig") as f:
+            for r in c2.DictReader(f):
+                code = r.get("代码")
+                if code:
+                    raw[code] = (r.get("行业") or "").strip() or None
+        surv = GD.surviving_industries(raw, min_count=30)
+        industry_map = {c: ind for c, ind in raw.items() if ind in surv}
     # 切点
     size_cuts = vol_cuts = None
     bpath = "/app/data/profit_mining/group_buckets.json"
@@ -382,7 +396,8 @@ def _group_ctx():
         size_cuts = b.get("市值", {}).get("cuts")
         vol_cuts = b.get("波动率", {}).get("cuts")
     _GCTX = {"board_map": board_map, "mktcap_map": mktcap_map,
-             "size_cuts": size_cuts, "vol_cuts": vol_cuts}
+             "size_cuts": size_cuts, "vol_cuts": vol_cuts,
+             "industry_map": industry_map}
     return _GCTX
 
 
@@ -393,7 +408,8 @@ def _proc(code):
     ctx = _group_ctx()
     groups = {"board": GD.board_group(ctx["board_map"].get(code)),
               "size": GD.size_group(ctx["mktcap_map"].get(code), ctx["size_cuts"]),
-              "vol_cuts": ctx["vol_cuts"]}
+              "vol_cuts": ctx["vol_cuts"],
+              "industry": GD.industry_group(ctx["industry_map"].get(code))}
     return accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4, groups=groups)
 
 
