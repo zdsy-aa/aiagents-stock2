@@ -30,6 +30,7 @@ PAGE_FLAGS = [
     "show_longhubang", "show_smart_monitor", "show_portfolio", "show_news_flow",
     "show_macro_analysis", "show_macro_cycle", "show_config", "show_intraday",
     "show_chanlun",
+    "show_current_strategy",
 ]
 
 
@@ -39,3 +40,14 @@ def test_page_renders_without_exception(flag):
     at.session_state[flag] = True
     at.run()
     assert not at.exception, (flag, at.exception)
+
+
+def test_current_strategy_page_shows_four_categories():
+    at = AppTest.from_file("app.py", default_timeout=180)
+    at.session_state["show_current_strategy"] = True
+    at.run()
+    assert not at.exception, at.exception
+    text = "\n".join(str(el.value) for el in at.markdown)
+    for cat in ["选股", "买入卖出", "测试盈利", "找共同点"]:
+        assert cat in text, cat
+    assert "当前策略" in text
