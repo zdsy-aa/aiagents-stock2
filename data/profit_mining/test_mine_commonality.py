@@ -196,6 +196,29 @@ def test_dim_of_industry():
     print("OK dim_of_industry")
 
 
+def test_write_threshold_boards():
+    import tempfile
+    rows = [
+        {"group": "行业=甲", "plan": "A", "side": "buy", "pct": 0.15,
+         "params": (10, 0.618, 0.02, 5, 17, 5), "seg_total": 5000, "fires_all": 400,
+         "coverage": 0.62, "rate_all": 0.1, "lift": 2.0, "precision": 0.2},
+        {"group": "行业=乙", "plan": "A", "side": "buy", "pct": 0.15,
+         "params": (10, 0.618, 0.02, 5, 17, 5), "seg_total": 5000, "fires_all": 400,
+         "coverage": 0.40, "rate_all": 0.1, "lift": 2.0, "precision": 0.2},   # <0.5 剔
+        {"group": "ALL", "plan": "A", "side": "buy", "pct": 0.15,
+         "params": (10, 0.618, 0.02, 5, 17, 5), "seg_total": 9000, "fires_all": 900,
+         "coverage": 0.55, "rate_all": 0.1, "lift": 1.0, "precision": 0.2},   # ALL 不进维度榜
+    ]
+    d = tempfile.mkdtemp()
+    paths = M.write_threshold_boards(rows, out_dir=d, ts="T", cover_min=0.50,
+                                     group_min_seg=3000)
+    ind = [p for p in paths if "达标榜_行业" in p][0]
+    with open(ind, encoding="utf-8-sig") as f:
+        txt = f.read()
+    assert "行业=甲" in txt and "行业=乙" not in txt, txt
+    print("OK write_threshold_boards")
+
+
 if __name__ == "__main__":
     test_count_for_signal()
     test_count_out_of_range_window()
@@ -207,4 +230,5 @@ if __name__ == "__main__":
     test_write_reports()
     test_accumulate_stock_industry()
     test_dim_of_industry()
+    test_write_threshold_boards()
     print("ALL OK")

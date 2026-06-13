@@ -288,7 +288,7 @@ def write_grouped_reports(rows, out_dir="/app/data/commonality_reports", ts=None
     pcols_B = ["periods", "form", "fast", "slow", "signal"]
     metric = ["seg_total", "coverage", "lift", "lift_all", "uplift", "uplift_ratio",
               "precision", "fires_all"]
-    for dim in ("板块", "市值", "波动率"):
+    for dim in ("板块", "市值", "波动率", "行业"):
         drows = [r for r in rows if _dim_of(r["group"]) == dim
                  and r["seg_total"] >= group_min_seg and r["fires_all"] >= row_min_fires
                  and r["uplift"] != float("-inf")]
@@ -322,6 +322,35 @@ def write_grouped_reports(rows, out_dir="/app/data/commonality_reports", ts=None
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md) + "\n")
     paths.append(md_path)
+    return paths
+
+
+def write_threshold_boards(rows, out_dir="/app/data/commonality_reports", ts=None,
+                           cover_min=0.50, topn=60,
+                           group_min_seg=GROUP_MIN_SEG, row_min_fires=ROW_MIN_FIRES):
+    """各维度达标榜：组内 coverage>cover_min(且过样本门槛)的参数,按 coverage 降序。
+    回答"分维度后哪个子组+哪套参数能凑出 >cover_min 共性"。"""
+    import time
+    ts = ts or time.strftime("%Y%m%d_%H%M%S")
+    os.makedirs(out_dir, exist_ok=True)
+    metric = ["coverage", "lift", "precision", "seg_total", "fires_all"]
+    paths = []
+    for dim in ("行业", "板块", "市值", "波动率"):
+        drows = [r for r in rows
+                 if _dim_of(r["group"]) == dim
+                 and r["seg_total"] >= group_min_seg and r["fires_all"] >= row_min_fires
+                 and r["rate_all"] > 0 and r["coverage"] > cover_min]
+        drows.sort(key=lambda r: r["coverage"], reverse=True)
+        fpath = os.path.join(out_dir, f"分组达标榜_{dim}_{ts}.csv")
+        with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
+            w = _csv.writer(f)
+            w.writerow(["group", "plan", "side", "pct", "params"] + metric)
+            for r in drows[:topn * 12]:
+                ep = _expand_params(r["plan"], r["params"])
+                w.writerow([r["group"], r["plan"], r["side"], r["pct"],
+                            ";".join(f"{k}={v}" for k, v in ep.items())]
+                           + [r.get(m) for m in metric])
+        paths.append(fpath)
     return paths
 
 
@@ -432,6 +461,7 @@ def main():
     run_ts = time.strftime("%Y%m%d_%H%M%S")
     paths = write_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)           # 全市场ALL榜
     paths += write_grouped_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)  # 分组uplift榜
+    paths += write_threshold_boards(rows, out_dir="/app/data/commonality_reports", ts=run_ts) # 分组达标榜
     print(f"[共性挖掘] 股票{len(codes)} 组合keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
     for pth in paths:
         print("  写", pth, flush=True)
