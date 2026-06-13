@@ -72,3 +72,46 @@ def merge_counts(dst, src):
         acc = dst[k]
         for i in range(6):
             acc[i] += v[i]
+
+
+import csv as _csv
+
+_METRIC_COLS = ["seg_hit", "seg_total", "coverage", "rate_all", "lift", "precision"]
+
+
+def _write_one(fpath, ranked):
+    with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
+        w = _csv.writer(f)
+        w.writerow(["level", "signal"] + _METRIC_COLS)
+        for r in ranked:
+            w.writerow([r["plan"], r["params"]] + [r[c] for c in _METRIC_COLS])
+
+
+def _write_setup_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
+                         cover_min=0.50, topn=30):
+    """rows(finalize后) -> 主榜(coverage>=门槛) + 最佳可达Top + 横向对比md。"""
+    ts = ts or time.strftime("%Y%m%d_%H%M%S")
+    os.makedirs(out_dir, exist_ok=True)
+    main = filter_rank(rows, cover_min=cover_min)                      # coverage>=门槛,按lift降序
+    best = sorted([r for r in rows if r["rate_all"] > 0 and r["lift"] != float("inf")],
+                  key=lambda r: r["lift"], reverse=True)[:topn]
+    main_path = os.path.join(out_dir, f"蓄势特征_共性_zz6_{ts}.csv")
+    best_path = os.path.join(out_dir, f"蓄势特征_最佳可达_zz6_{ts}.csv")
+    _write_one(main_path, main); _write_one(best_path, best)
+    md_path = os.path.join(out_dir, f"蓄势特征_横向对比_{ts}.md")
+    edge = [r for r in main if r["lift"] > 1.0]
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(f"# 蓄势期特征共性 横向对比\n\n生成 {ts}，zz6，buy向(起涨前蓄势窗口)，"
+                f"覆盖率门槛 {cover_min}；段级覆盖率，重点看 coverage>0.5 且 lift>1\n\n")
+        f.write(f"- **达标(coverage≥{cover_min}) 组合数**：{len(main)}；其中 **lift>1 的**：{len(edge)}\n")
+        if edge:
+            f.write("- **★coverage>0.5 且 lift>1（真 edge）Top10**：\n")
+            for r in edge[:10]:
+                f.write(f"  - [{r['plan']}] {r['params']}：覆盖{r['coverage']:.2f} 提升度{r['lift']:.2f} 精确{r['precision']:.2f}\n")
+        else:
+            f.write("- 无 coverage>0.5 且 lift>1 的组合。\n")
+        if best:
+            b = best[0]
+            f.write(f"- 全局最高 lift（不卡覆盖）：[{b['plan']}] {b['params']} "
+                    f"覆盖{b['coverage']:.2f} 提升度{b['lift']:.2f} 精确{b['precision']:.2f}\n")
+    return [main_path, best_path, md_path]
