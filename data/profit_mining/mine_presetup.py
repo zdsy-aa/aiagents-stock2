@@ -73,3 +73,42 @@ def merge_counts(dst, src):
         a = dst[k]
         for i in range(6):
             a[i] += v[i]
+
+
+def write_presetup_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
+                           cover_min=0.50, topn=30):
+    """rows(finalize后,仅group=ALL/buy/zz6) -> 每方案两类CSV + 横向对比md。"""
+    ts = ts or time.strftime("%Y%m%d_%H%M%S")
+    os.makedirs(out_dir, exist_ok=True)
+    paths = []
+    summary = []
+    for plan in ("A", "B"):
+        sub = [r for r in rows if r["plan"] == plan]
+        # 主榜: coverage>=门槛
+        main = filter_rank(sub, cover_min=cover_min)
+        main_path = os.path.join(out_dir, f"方案{plan}_起涨前蓄势_zz6_{ts}.csv")
+        _write_board(main_path, plan, "buy", PCT, main); paths.append(main_path)
+        # 最佳可达: 不卡覆盖率,按lift取Top
+        best = sorted([r for r in sub if r["rate_all"] > 0 and r["lift"] != float("inf")],
+                      key=lambda r: r["lift"], reverse=True)[:topn]
+        best_path = os.path.join(out_dir, f"方案{plan}_起涨前蓄势最佳可达_zz6_{ts}.csv")
+        _write_board(best_path, plan, "buy", PCT, best); paths.append(best_path)
+        if main:
+            b = main[0]
+            summary.append(f"- **方案{plan} 起涨前蓄势 zz6**：达标{len(main)}组，"
+                           f"最佳 {_expand_params(plan, b['params'])} 覆盖{b['coverage']:.2f} "
+                           f"提升度{b['lift']:.2f} 精确{b['precision']:.2f}")
+        elif best:
+            b = best[0]
+            summary.append(f"- **方案{plan} 起涨前蓄势 zz6**：无≥{cover_min}达标；"
+                           f"最佳可达 {_expand_params(plan, b['params'])} 覆盖{b['coverage']:.2f} "
+                           f"提升度{b['lift']:.2f} 精确{b['precision']:.2f}")
+        else:
+            summary.append(f"- **方案{plan} 起涨前蓄势 zz6**：无数据")
+    md_path = os.path.join(out_dir, f"起涨前蓄势_横向对比_{ts}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(f"# 起涨前蓄势窗口共性 横向对比\n\n生成 {ts}，zz6，buy向，覆盖率门槛 {cover_min}，"
+                f"近窗口=上一涨段+下降段(gap≤{NEAR_N})/远窗口=前{FAR}天(均含波谷L)\n\n")
+        f.write("\n".join(summary) + "\n")
+    paths.append(md_path)
+    return paths
