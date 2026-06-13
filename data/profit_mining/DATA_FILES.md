@@ -27,6 +27,10 @@
 | `forward_stats.csv` | build_forward_stats.py | 回测/统计 | 前向收益统计 |
 | `scores_all_combos.csv` | mine_combos.py | walk_forward.py | L1/L2/L3 组合全量评分 |
 
+> 报告产物(commonality_reports/，按时间戳归档，保留)：
+> - mine_commonality.py → `方案AB_共性横向对比_*.md` + `方案{A/B}_{上涨前/下跌前}{共性/最佳可达}_zz{6/10/15/20}_*.csv` + 分组榜（拐点后[L,L+4]变体）
+> - mine_presetup.py → `起涨前蓄势_横向对比_*.md` + `方案{A/B}_起涨前蓄势{,最佳可达}_zz6_*.csv`（起涨前蓄势窗口变体）
+
 ## 标定/产物 JSON（固化阈值，前台/调度读取）
 | 文件 | 生产脚本 | 主要消费方 | 说明 |
 |------|---------|-----------|------|
