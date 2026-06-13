@@ -1,6 +1,6 @@
 # mine_setup_commonality.py —— 蓄势期特征共性挖掘(buy向/仅zz6, L1单+L2两两)。
 # 复用 mine_presetup 的起涨前蓄势窗口 + 段级覆盖率; 信号库=presetup_signals(蓄势特征)。
-import os, sys, time
+import os, sys, time, csv as _csv
 from collections import defaultdict
 import numpy as np
 import pandas as pd
@@ -73,8 +73,6 @@ def merge_counts(dst, src):
         for i in range(6):
             acc[i] += v[i]
 
-
-import csv as _csv
 
 _METRIC_COLS = ["seg_hit", "seg_total", "coverage", "rate_all", "lift", "precision"]
 
