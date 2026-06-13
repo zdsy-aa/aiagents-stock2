@@ -31,6 +31,7 @@
 > - mine_commonality.py → `方案AB_共性横向对比_*.md` + `方案{A/B}_{上涨前/下跌前}{共性/最佳可达}_zz{6/10/15/20}_*.csv` + 分组榜（拐点后[L,L+4]变体）
 > - mine_presetup.py → `起涨前蓄势_横向对比_*.md` + `方案{A/B}_起涨前蓄势{,最佳可达}_zz6_*.csv`（起涨前蓄势窗口×动量信号变体）
 > - mine_setup_commonality.py → `蓄势特征_横向对比_*.md` + `蓄势特征_{共性,最佳可达}_zz6_*.csv`（起涨前蓄势窗口×蓄势期特征 L1/L2 变体）
+> - 紧窗口变体: mine_presetup.py / mine_setup_commonality.py 支持 `TIGHT_K` env(=K)→窗口改为[L-K,L],产物名加 `_tightK{K}`(默认不设=自适应)
 
 ## 标定/产物 JSON（固化阈值，前台/调度读取）
 | 文件 | 生产脚本 | 主要消费方 | 说明 |
