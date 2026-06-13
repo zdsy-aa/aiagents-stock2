@@ -56,7 +56,7 @@ import param_signals as PS
 import group_dims as GD
 from collections import defaultdict
 
-DEFAULT_PCTS = (0.10, 0.15, 0.20)
+DEFAULT_PCTS = (0.06, 0.10, 0.15, 0.20)
 
 
 def _win_arrays(windows, n):
