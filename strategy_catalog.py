@@ -172,8 +172,9 @@ CATALOG = [
     {
         "类别": "找共同点", "名称": "🔍 共性挖掘(方案A/B)",
         "脚本": ["mine_commonality.py"],
-        "解释": "涨跌前期共性挖掘——逐股累加每个信号在 ±窗口 内的命中→覆盖率/提升度/精确度→报告；找盈利买卖点的共同特征(按提升度排序)。",
+        "解释": "涨跌前期共性挖掘——ZigZag 按各阈值切涨跌段，逐股累加每个信号在拐点后[L,L+4]窗口内的命中→覆盖率/提升度/精确度→报告(方案A斐波×MACD / 方案B BBI×MACD，按提升度排序)。",
         "关键参数": [
+            ("ZigZag 阈值 DEFAULT_PCTS", "mine_commonality.py", "6% / 10% / 15% / 20%"),
             ("窗口 W / offset", "build_features.py / mine_commonality.py", "±2 窗口"),
             ("排序口径", "mine_commonality.py", "覆盖率/提升度/精确度"),
         ],
