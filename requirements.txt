@@ -19,3 +19,4 @@ beautifulsoup4==4.14.3
 lxml==6.1.1
 aktools==0.0.91
 baostock==0.9.1
+lightgbm
