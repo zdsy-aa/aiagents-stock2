@@ -13,6 +13,7 @@ from turnover_features import chip_series
 PCT = 0.06
 NEAR_N = 20
 FAR = 7
+TIGHT_K = int(os.getenv("TIGHT_K")) if os.getenv("TIGHT_K") else None
 
 _TURN = {}   # {code: pd.Series(turn% , index=datetime)}; fork前填,COW共享不pickle
 
@@ -24,7 +25,7 @@ def _win_arrays(windows, n):
     return st, en
 
 
-def accumulate_setup(df, code, turn=None):
+def accumulate_setup(df, code, turn=None, tight_k=None):
     """单股 -> counts dict key=("ALL",level,"buy",PCT,name) val=[seg_hit,seg_total,
     fires_pos,bars_pos,fires_all,n]。level∈{L1,L2}; name=信号名(L2='a & b')。
     turn=该股换手率Series(None则chip类全False)。"""
@@ -33,7 +34,7 @@ def accumulate_setup(df, code, turn=None):
     if n == 0:
         return dict(out)
     piv = SW.Z.zigzag_pivots(df["High"].tolist(), df["Low"].tolist(), PCT)
-    wins = SW.presetup_windows_from_pivots(piv, NEAR_N, FAR)
+    wins = SW.presetup_windows_from_pivots(piv, NEAR_N, FAR, tight_k=tight_k)
     if not wins:
         return dict(out)
     st, en = _win_arrays(wins, n)
@@ -86,17 +87,17 @@ def _write_one(fpath, ranked):
 
 
 def _write_setup_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
-                         cover_min=0.50, topn=30):
+                         cover_min=0.50, topn=30, suffix=""):
     """rows(finalize后) -> 主榜(coverage>=门槛) + 最佳可达Top + 横向对比md。"""
     ts = ts or time.strftime("%Y%m%d_%H%M%S")
     os.makedirs(out_dir, exist_ok=True)
     main = filter_rank(rows, cover_min=cover_min)                      # coverage>=门槛,按lift降序
     best = sorted([r for r in rows if r["rate_all"] > 0 and r["lift"] != float("inf")],
                   key=lambda r: r["lift"], reverse=True)[:topn]
-    main_path = os.path.join(out_dir, f"蓄势特征_共性_zz6_{ts}.csv")
-    best_path = os.path.join(out_dir, f"蓄势特征_最佳可达_zz6_{ts}.csv")
+    main_path = os.path.join(out_dir, f"蓄势特征_共性_zz6{suffix}_{ts}.csv")
+    best_path = os.path.join(out_dir, f"蓄势特征_最佳可达_zz6{suffix}_{ts}.csv")
     _write_one(main_path, main); _write_one(best_path, best)
-    md_path = os.path.join(out_dir, f"蓄势特征_横向对比_{ts}.md")
+    md_path = os.path.join(out_dir, f"蓄势特征_横向对比{suffix}_{ts}.md")
     edge = [r for r in main if r["lift"] > 1.0]
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(f"# 蓄势期特征共性 横向对比\n\n生成 {ts}，zz6，buy向(起涨前蓄势窗口)，"
@@ -131,7 +132,7 @@ def _proc(code):
         df = _load_kline(code)
         if df is None or len(df) < 70:
             return {}
-        return accumulate_setup(df, code, turn=_TURN.get(code))
+        return accumulate_setup(df, code, turn=_TURN.get(code), tight_k=TIGHT_K)
     except Exception:
         return {}
 
@@ -142,6 +143,7 @@ def main():
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     _load_turn_by_code()                       # fork前填全局,worker COW共享
     print(f"  turnover 覆盖 {len(_TURN)} 股", flush=True)
+    print(f"  窗口模式: {'紧窗口 K='+str(TIGHT_K) if TIGHT_K else '自适应'}", flush=True)
     codes = _universe()
     if limit:
         codes = codes[:limit]
@@ -154,7 +156,8 @@ def main():
                 print(f"  …{k}/{len(codes)}，{int(time.time()-t0)}s", flush=True)
     rows = finalize(acc)
     run_ts = time.strftime("%Y%m%d_%H%M%S")
-    paths = _write_setup_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)
+    suffix = f"_tightK{TIGHT_K}" if TIGHT_K else ""
+    paths = _write_setup_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts, suffix=suffix)
     print(f"[蓄势特征] 股票{len(codes)} 信号keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
     for pth in paths:
         print("  写", pth, flush=True)
