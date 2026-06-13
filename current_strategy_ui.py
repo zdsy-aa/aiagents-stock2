@@ -78,6 +78,12 @@ def _render_entry(e):
     with st.expander(e["名称"], expanded=False):
         st.markdown("**承载脚本**：" + " ".join(f"`{s}`" for s in e["脚本"]))
         st.markdown(e["解释"])
+        d = e.get("详细")
+        if d:
+            st.markdown("**📖 详细说明**：")
+            for label in ("指标", "参数", "测试数据", "数据来源"):
+                if d.get(label):
+                    st.markdown(f"- **{label}**：{d[label]}")
         if e["关键参数"]:
             st.markdown("**关键可调参数**：")
             for name, where, val in e["关键参数"]:
