@@ -115,3 +115,52 @@ def _write_setup_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
             f.write(f"- 全局最高 lift（不卡覆盖）：[{b['plan']}] {b['params']} "
                     f"覆盖{b['coverage']:.2f} 提升度{b['lift']:.2f} 精确{b['precision']:.2f}\n")
     return [main_path, best_path, md_path]
+
+
+def _load_turn_by_code(path="/app/data/profit_mining/turnover.csv"):
+    """turnover.csv(code,date,turn) -> {code: Series(turn%, index=datetime)}。填入全局 _TURN。"""
+    if not os.path.exists(path):
+        return
+    df = pd.read_csv(path, dtype={"code": str})
+    df["date"] = pd.to_datetime(df["date"])
+    for code, g in df.groupby("code", sort=False):
+        _TURN[code] = pd.Series(g["turn"].to_numpy(float),
+                                index=pd.DatetimeIndex(g["date"].to_numpy()))
+
+
+def _proc(code):
+    try:
+        df = _load_kline(code)
+        if df is None or len(df) < 70:
+            return {}
+        return accumulate_setup(df, code, turn=_TURN.get(code))
+    except Exception:
+        return {}
+
+
+def main():
+    from multiprocessing import Pool
+    t0 = time.time()
+    limit = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    _load_turn_by_code()                       # fork前填全局,worker COW共享
+    print(f"  turnover 覆盖 {len(_TURN)} 股", flush=True)
+    codes = _universe()
+    if limit:
+        codes = codes[:limit]
+    nproc = int(os.getenv("NPROC", "8"))
+    acc = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
+    with Pool(nproc) as p:
+        for k, c in enumerate(p.imap_unordered(_proc, codes, chunksize=8), 1):
+            merge_counts(acc, c)
+            if k % 500 == 0:
+                print(f"  …{k}/{len(codes)}，{int(time.time()-t0)}s", flush=True)
+    rows = finalize(acc)
+    run_ts = time.strftime("%Y%m%d_%H%M%S")
+    paths = _write_setup_reports(rows, out_dir="/app/data/commonality_reports", ts=run_ts)
+    print(f"[蓄势特征] 股票{len(codes)} 信号keys{len(rows)} 用时{int(time.time()-t0)}s", flush=True)
+    for pth in paths:
+        print("  写", pth, flush=True)
+
+
+if __name__ == "__main__":
+    main()
