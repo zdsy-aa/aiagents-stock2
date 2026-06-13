@@ -22,10 +22,11 @@ def positive_windows(high, low, pct, fwd=4):
     return windows_from_pivots(pivots, fwd)
 
 
-def presetup_windows_from_pivots(pivots, near_n=20, far=7):
+def presetup_windows_from_pivots(pivots, near_n=20, far=7, tight_k=None):
     """每个上涨段(L->H)的"起涨前蓄势窗口"(buy向, 含波谷L, 截止于L无泄漏)。
-    近(上一涨段终点H_prev到L的间隔 gap<=near_n): 窗口=[上一涨段起点L_prev, L];
-    远(gap>near_n 或无上一涨段): 窗口=[L-far, L]。返回 list[list[int]](升序bar索引)。"""
+    tight_k 给定: 紧窗口=[max(0,L-tight_k), L](忽略近/远自适应)。
+    tight_k=None(默认): 近(上一涨段终点H_prev到L的间隔 gap<=near_n)->[上一涨段起点L_prev, L];
+    远(gap>near_n 或无上一涨段)->[L-far, L]。返回 list[list[int]](升序bar索引)。"""
     segs = Z.segments_from_pivots(pivots)
     wins = []
     prev_up = None                       # (L_prev_idx, H_prev_idx)
@@ -33,7 +34,9 @@ def presetup_windows_from_pivots(pivots, near_n=20, far=7):
         if d != "up":
             continue
         L = start
-        if prev_up is not None and (L - prev_up[1]) <= near_n:
+        if tight_k is not None:
+            lo = max(0, L - tight_k)
+        elif prev_up is not None and (L - prev_up[1]) <= near_n:
             lo = prev_up[0]              # 上一涨段起点
         else:
             lo = max(0, L - far)
