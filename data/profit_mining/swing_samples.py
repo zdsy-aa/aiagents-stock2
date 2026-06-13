@@ -20,3 +20,23 @@ def positive_windows(high, low, pct, fwd=4):
     """日K高低 → (up_windows, down_windows)。"""
     pivots = Z.zigzag_pivots(high, low, pct)
     return windows_from_pivots(pivots, fwd)
+
+
+def presetup_windows_from_pivots(pivots, near_n=20, far=7):
+    """每个上涨段(L->H)的"起涨前蓄势窗口"(buy向, 含波谷L, 截止于L无泄漏)。
+    近(上一涨段终点H_prev到L的间隔 gap<=near_n): 窗口=[上一涨段起点L_prev, L];
+    远(gap>near_n 或无上一涨段): 窗口=[L-far, L]。返回 list[list[int]](升序bar索引)。"""
+    segs = Z.segments_from_pivots(pivots)
+    wins = []
+    prev_up = None                       # (L_prev_idx, H_prev_idx)
+    for start, end, d in segs:
+        if d != "up":
+            continue
+        L = start
+        if prev_up is not None and (L - prev_up[1]) <= near_n:
+            lo = prev_up[0]              # 上一涨段起点
+        else:
+            lo = max(0, L - far)
+        wins.append(list(range(lo, L + 1)))   # 含L
+        prev_up = (start, end)
+    return wins
