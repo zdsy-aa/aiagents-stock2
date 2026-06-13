@@ -75,7 +75,7 @@ def main():
         if st.button("🏠 股票分析-日", width='stretch', key="nav_home", help="返回首页，进行单只股票的日线深度分析"):
             # 清除所有功能页面标志
             for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
-                       'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull', 'show_news_flow', 'show_macro_cycle', 'show_macro_analysis', 'show_value_stock', 'show_intraday', 'show_chanlun', 'show_liumai', 'show_combo', 'show_stable']:
+                       'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull', 'show_news_flow', 'show_macro_cycle', 'show_macro_analysis', 'show_value_stock', 'show_intraday', 'show_chanlun', 'show_liumai', 'show_combo', 'show_stable', 'show_current_strategy']:
                 if key in st.session_state:
                     del st.session_state[key]
 
@@ -86,7 +86,7 @@ def main():
                         'show_sector_strategy', 'show_longhubang', 'show_portfolio',
                         'show_low_price_bull', 'show_small_cap', 'show_profit_growth',
                         'show_value_stock', 'show_news_flow', 'show_macro_analysis',
-                        'show_macro_cycle', 'show_smart_monitor', 'show_chanlun', 'show_liumai', 'show_combo', 'show_stable']:
+                        'show_macro_cycle', 'show_smart_monitor', 'show_chanlun', 'show_liumai', 'show_combo', 'show_stable', 'show_current_strategy']:
                 if key in st.session_state:
                     del st.session_state[key]
 
@@ -172,6 +172,16 @@ def main():
                            'show_small_cap', 'show_profit_growth', 'show_value_stock', 'show_news_flow',
                            'show_macro_analysis', 'show_macro_cycle', 'show_smart_monitor', 'show_intraday',
                            'show_chanlun', 'show_liumai', 'show_combo']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+
+            if st.button("📋 当前策略", width='stretch', key="nav_current_strategy", help="集中查看全部 选股/买卖/测试盈利/找共同点 策略的脚本与中文说明（只读，便于识别后决定修改）"):
+                st.session_state.show_current_strategy = True
+                for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
+                           'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull',
+                           'show_small_cap', 'show_profit_growth', 'show_value_stock', 'show_news_flow',
+                           'show_macro_analysis', 'show_macro_cycle', 'show_smart_monitor', 'show_intraday',
+                           'show_chanlun', 'show_liumai', 'show_combo', 'show_stable']:
                     if key in st.session_state:
                         del st.session_state[key]
 
@@ -435,6 +445,12 @@ def main():
     if 'show_stable' in st.session_state and st.session_state.show_stable:
         from stable_ui import display_stable_selector
         display_stable_selector()
+        return
+
+    # 检查是否显示「当前策略」只读总览页
+    if 'show_current_strategy' in st.session_state and st.session_state.show_current_strategy:
+        from current_strategy_ui import display_current_strategy
+        display_current_strategy()
         return
 
     # 检查是否显示分时分析（放在所有 show_* 之后、默认日线主界面之前）
