@@ -303,8 +303,8 @@ def main():
             st.markdown(f"**分析记录**: {record_count}条")
             st.markdown(f"**监测股票**: {len(stocks)}只")
             st.markdown(f"**待处理**: {len(notifications)}条")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("侧栏状态面板读取失败: %s", e)
 
         st.markdown("---")
 

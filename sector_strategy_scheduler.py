@@ -449,9 +449,9 @@ class SectorStrategyScheduler(BaseScheduler):
                 next_run = jobs[0].next_run
                 if next_run:
                     return next_run.strftime('%Y-%m-%d %H:%M:%S')
-        except Exception:
-            pass
-        
+        except Exception as e:
+            logger.debug("获取板块策略下次运行时间失败: %s", e)
+
         return None
 
 

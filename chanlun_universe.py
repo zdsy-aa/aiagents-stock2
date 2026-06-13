@@ -4,7 +4,10 @@ import os
 import re
 import sqlite3
 import glob
+import logging
 from typing import List, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 # 本地K线/代码库文件名可能带市场前缀（sh/sz/bj），统一剥成裸代码
 _PREFIX_RE = re.compile(r"^(sh|sz|bj)", re.IGNORECASE)
@@ -53,8 +56,9 @@ def _name_map() -> dict:
                 m[_bare(code)] = name
         finally:
             conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        # 文件存在但读取失败(库损坏/schema变更/被锁)→静默返回空会让 ST 过滤无声失效,记一笔
+        logger.warning("读取 codes.db 失败,code->name 映射为空(ST 过滤将退化): %s", e)
     return m
 
 
