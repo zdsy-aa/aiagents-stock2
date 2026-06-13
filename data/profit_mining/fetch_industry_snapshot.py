@@ -15,7 +15,7 @@ def _code6(bs_code):
 
 
 def extract_industry(rows, universe):
-    """baostock 行 list → {代码6位: 行业}。只留 universe 内 & 行业非空。"""
+    """baostock 行 list → {代码6位: 行业}。只留 universe 内 & 行业非空；重复代码用 setdefault 保留首次出现。"""
     out = {}
     uni = set(universe)
     for r in rows:
