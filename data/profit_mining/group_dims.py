@@ -27,6 +27,18 @@ def size_group(mktcap, cuts):
     return f"市值={SIZE_LABELS[bucketize(mktcap, cuts)]}"
 
 
+def industry_group(industry):
+    """行业 → '行业=X'；空/None → None(不分组)。"""
+    return f"行业={industry}" if industry else None
+
+
+def surviving_industries(industry_map, min_count=30):
+    """industry_map={代码:行业} → 股票数≥min_count 的行业集合(小行业被剔)。"""
+    from collections import Counter
+    c = Counter(v for v in industry_map.values() if v)
+    return {ind for ind, n in c.items() if n >= min_count}
+
+
 def vol20_series(df, win=20):
     """逐 bar 波动率 vol20 = rolling(win) 均值 of (High-Low)/Close；min_periods=1。返回 numpy。"""
     amp = (df["High"] - df["Low"]) / df["Close"]
