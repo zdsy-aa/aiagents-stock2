@@ -96,6 +96,12 @@ PANEL = "/app/data/profit_mining/setup_panel.npz"
 IDXCSV = "/app/data/profit_mining/index_sh000001.csv"
 TURNCSV = "/app/data/profit_mining/turnover.csv"
 TRAIN_END, OOS_START, OOS_END = "2023-12-31", "2024-01-01", "2025-10-31"
+LABELS = [
+    ("fwd_6_20",     "fwd",    dict(H=20, X=0.06)),
+    ("fwd_10_10",    "fwd",    dict(H=10, X=0.10)),
+    ("fwd_10_20",    "fwd",    dict(H=20, X=0.10)),
+    ("excess_10_20", "excess", dict(H=20, X=0.10)),
+]
 _IDX = {"close": None}
 _TURN = {}
 
@@ -119,9 +125,15 @@ def _panel_proc(code):
         if df is None or len(df) < 300:
             return None
         X = SF.compute_features(df, idx_close=_IDX["close"], turn=_TURN.get(code))
-        yf = SF.label_fwd(df); yz = SF.label_zz(df)
+        ys = []
+        for name, kind, kw in LABELS:
+            if kind == "fwd":
+                ys.append(SF.label_fwd(df, **kw))
+            else:
+                ys.append(SF.label_excess(df, _IDX["close"], **kw))
+        Y = np.column_stack(ys)
         dates = df.index.to_numpy().astype("datetime64[D]")
-        return X.astype(np.float32), yf.astype(np.float32), yz.astype(np.float32), dates
+        return X.astype(np.float32), Y.astype(np.float32), dates
     except Exception:
         return None
 
@@ -134,17 +146,19 @@ def build_panel(limit=0):
     if limit:
         codes = codes[:limit]
     nproc = int(os.getenv("NPROC", "8"))
-    Xs, yfs, yzs, dts = [], [], [], []
+    Xs, Ys, dts = [], [], []
     with Pool(nproc) as p:
         for r in p.imap_unordered(_panel_proc, codes, chunksize=8):
             if r is None:
                 continue
-            X, yf, yz, dates = r
-            Xs.append(X); yfs.append(yf); yzs.append(yz); dts.append(dates)
-    X = np.vstack(Xs); yf = np.concatenate(yfs); yz = np.concatenate(yzs)
+            X, Y, dates = r
+            Xs.append(X); Ys.append(Y); dts.append(dates)
+    X = np.vstack(Xs); Y = np.vstack(Ys)
     dates = np.concatenate(dts).astype("datetime64[D]")
-    np.savez(PANEL, X=X, yf=yf, yz=yz, dates=dates.astype("int64"), cols=np.array(SF.FEATURE_COLS))
-    return X, yf, yz, dates
+    names = np.array([n for n, _, _ in LABELS])
+    np.savez(PANEL, X=X, Y=Y, dates=dates.astype("int64"),
+             cols=np.array(SF.FEATURE_COLS), label_names=names)
+    return X, Y, dates
 
 
 def fit_gbdt(X, y, scale_pos_weight=1.0):
@@ -198,21 +212,21 @@ def main():
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     if os.path.exists(PANEL) and not limit:
         d = np.load(PANEL, allow_pickle=True)
-        X, yf, yz = d["X"], d["yf"], d["yz"]; dates = d["dates"].astype("datetime64[D]")
-        print(f"  载入面板 {X.shape}", flush=True)
+        X, Y = d["X"], d["Y"]; dates = d["dates"].astype("datetime64[D]")
+        print(f"  载入面板 {X.shape} 标签 {Y.shape}", flush=True)
     else:
-        X, yf, yz, dates = build_panel(limit=limit)
-        print(f"  构建面板 {X.shape} 用时{int(time.time()-t0)}s", flush=True)
-    lines = [f"# 起涨打分模型 OOS 评估\n\n生成 {time.strftime('%Y%m%d_%H%M%S')}，"
+        X, Y, dates = build_panel(limit=limit)
+        print(f"  构建面板 {X.shape} 标签 {Y.shape} 用时{int(time.time()-t0)}s", flush=True)
+    lines = [f"# 起涨打分模型v2(收紧标签) OOS 评估\n\n生成 {time.strftime('%Y%m%d_%H%M%S')}，"
              f"训练≤{TRAIN_END} / OOS {OOS_START}~{OOS_END}，特征{len(SF.FEATURE_COLS)}列，"
              f"AUC>0.55才算有edge，lift@10%=OOS前10%分bar实际起涨率÷基线\n"]
-    _run_one("y_fwd(后20日涨≥6%)", X, yf, dates, lines)
-    _run_one("y_zz(zz6波谷前10根)", X, yz, dates, lines)
+    for j, (name, _, _) in enumerate(LABELS):
+        _run_one(name, X, Y[:, j], dates, lines)
     ts = time.strftime("%Y%m%d_%H%M%S")
-    out = f"/app/data/commonality_reports/起涨打分模型_评估_{ts}.md"
+    out = f"/app/data/commonality_reports/起涨打分模型v2_评估_{ts}.md"
     os.makedirs(os.path.dirname(out), exist_ok=True)
     open(out, "w", encoding="utf-8").write("\n".join(lines) + "\n")
-    print(f"[打分模型] 用时{int(time.time()-t0)}s 写 {out}", flush=True)
+    print(f"[打分模型v2] 用时{int(time.time()-t0)}s 写 {out}", flush=True)
     print("\n".join(lines), flush=True)
 
 
