@@ -6,9 +6,22 @@ TP, SL, MAXHOLD, COST, TOPN = 0.10, -0.05, 10, 0.002, 10
 SLOTS = TOPN * MAXHOLD   # 槽位法满仓上限近似
 
 
-def simulate_trade(o, h, l, c, entry_idx, tp=TP, sl=SL, maxhold=MAXHOLD, cost=COST):
+def _ma(c, n=10):
+    c = np.asarray(c, float)
+    out = np.full(len(c), np.nan)
+    if len(c) >= n:
+        cs = np.cumsum(np.insert(c, 0, 0.0))
+        out[n - 1:] = (cs[n:] - cs[:-n]) / n
+    return out
+
+
+def simulate_trade(o, h, l, c, entry_idx, mode="fixed", tp=TP, sl=SL, maxhold=MAXHOLD,
+                   cost=COST, trail=0.08, ma=None):
     """某股 OHLC(numpy) + 入场行 entry_idx(=t+1) -> (exit_idx, gross, net, reason)。
-    entry=open[entry_idx]; 逐日先判止损(同日同破取止损)再止盈; 否则持满maxhold收盘卖。
+    entry=open[entry_idx]; mode∈{fixed,trailing,trend}。
+    fixed: 逐日先判止损(同日同破取止损)再止盈; 否则持满maxhold收盘卖。
+    trailing: 止损优先,否则跟踪最高价回撤trail比例触发移动止盈; 否则持满maxhold收盘卖。
+    trend: 止损优先,否则跌破ma触发"破MA"; 否则持满maxhold收盘卖。
     entry非法 -> None。"""
     n = len(c)
     if entry_idx >= n:
@@ -16,15 +29,38 @@ def simulate_trade(o, h, l, c, entry_idx, tp=TP, sl=SL, maxhold=MAXHOLD, cost=CO
     entry = o[entry_idx]
     if not np.isfinite(entry) or entry <= 0:
         return None
-    tp_px, sl_px = entry * (1 + tp), entry * (1 + sl)
+    sl_px = entry * (1 + sl)
     last = min(entry_idx + maxhold - 1, n - 1)
-    for i in range(entry_idx, last + 1):
-        if l[i] <= sl_px:
-            return (i, sl, sl - cost, "止损")
-        if h[i] >= tp_px:
-            return (i, tp, tp - cost, "止盈")
-    gross = c[last] / entry - 1.0
-    return (last, gross, gross - cost, "到期")
+    if mode == "fixed":
+        tp_px = entry * (1 + tp)
+        for i in range(entry_idx, last + 1):
+            if l[i] <= sl_px:
+                return (i, sl, sl - cost, "止损")
+            if h[i] >= tp_px:
+                return (i, tp, tp - cost, "止盈")
+        g = c[last] / entry - 1.0
+        return (last, g, g - cost, "到期")
+    if mode == "trailing":
+        peak = h[entry_idx]
+        for i in range(entry_idx, last + 1):
+            if l[i] <= sl_px:
+                return (i, sl, sl - cost, "止损")
+            peak = max(peak, h[i])
+            if i > entry_idx and l[i] <= peak * (1 - trail):
+                g = peak * (1 - trail) / entry - 1.0
+                return (i, g, g - cost, "移动止盈")
+        g = c[last] / entry - 1.0
+        return (last, g, g - cost, "到期")
+    if mode == "trend":
+        for i in range(entry_idx, last + 1):
+            if l[i] <= sl_px:
+                return (i, sl, sl - cost, "止损")
+            if i > entry_idx and ma is not None and np.isfinite(ma[i]) and c[i] < ma[i]:
+                g = c[i] / entry - 1.0
+                return (i, g, g - cost, "破MA")
+        g = c[last] / entry - 1.0
+        return (last, g, g - cost, "到期")
+    raise ValueError(mode)
 
 
 def select_topn(day_codes, day_scores, held, topn=TOPN):
