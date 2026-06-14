@@ -84,6 +84,25 @@ def label_fwd(df, H=20, X=0.06):
     return y
 
 
+def label_excess(df, idx_close, H=20, X=0.10):
+    """个股H日close-to-close收益 - 大盘H日收益 >= X ->1; 末尾不足H或大盘缺失 ->NaN。
+    idx_close=对齐前的大盘收盘Series(reindex+ffill到df.index);None->全NaN。"""
+    c = df["Close"].to_numpy(float)
+    n = len(c); y = np.full(n, np.nan)
+    if idx_close is None:
+        return y
+    ic = idx_close.reindex(df.index).ffill().to_numpy(float)
+    for t in range(n):
+        if t + H >= n:
+            break
+        if np.isnan(ic[t]) or np.isnan(ic[t + H]) or ic[t] <= 0 or c[t] <= 0:
+            continue
+        sr = c[t + H] / c[t] - 1.0
+        ir = ic[t + H] / ic[t] - 1.0
+        y[t] = 1.0 if (sr - ir) >= X else 0.0
+    return y
+
+
 def label_zz(df, pct=0.06, K=10):
     """t∈某zz段上涨段波谷L的[L-K,L] ->1; 其余0。返回 float numpy(0/1)。
     注:y_zz 用ZigZag(含未来确认)定义,仅作对照标签。"""
