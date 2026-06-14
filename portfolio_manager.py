@@ -142,8 +142,8 @@ class PortfolioManager:
         logger.info(f"{'='*60}\n")
         
         try:
-            # 导入app.py中的分析函数
-            from app import analyze_single_stock_for_batch
+            # 导入统一分析函数（来自 views.analysis_runner）
+            from views.analysis_runner import analyze_single_stock_for_batch
             
             # 构建分析师配置
             if selected_agents is None:
