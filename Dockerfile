@@ -22,7 +22,7 @@ RUN if [ "$MIRROR" = "cn" ]; then \
         rm -rf /etc/apt/sources.list.d/* || true; \
     fi
 
-# 安装基础依赖、中文字体（PDF 生成需要）、时区数据
+# 安装基础依赖、中文字体（PDF 生成需要）、时区数据、libgomp1（lightgbm 运行时依赖 libgomp.so.1）
 RUN apt-get update && apt-get install -y \
     curl \
     tar \
@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y \
     fonts-wqy-microhei \
     fontconfig \
     tzdata \
+    libgomp1 \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
     && fc-cache -fv \
