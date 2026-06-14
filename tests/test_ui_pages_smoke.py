@@ -31,6 +31,7 @@ PAGE_FLAGS = [
     "show_macro_analysis", "show_macro_cycle", "show_config", "show_intraday",
     "show_chanlun",
     "show_current_strategy",
+    "show_qizhang",
 ]
 
 

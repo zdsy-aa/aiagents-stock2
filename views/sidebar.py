@@ -134,6 +134,16 @@ def render_sidebar():
                     if key in st.session_state:
                         del st.session_state[key]
 
+            if st.button("📈 起涨预测(观察中)", width='stretch', key="nav_qizhang", help="起涨模型 C4 策略 paper-tracking 观察页(只读,不下单)"):
+                st.session_state.show_qizhang = True
+                for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
+                           'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull',
+                           'show_small_cap', 'show_profit_growth', 'show_value_stock', 'show_news_flow',
+                           'show_macro_analysis', 'show_macro_cycle', 'show_smart_monitor', 'show_intraday',
+                           'show_chanlun', 'show_liumai', 'show_combo', 'show_stable']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+
             if st.button("📋 当前策略", width='stretch', key="nav_current_strategy", help="集中查看全部 选股/买卖/测试盈利/找共同点 策略的脚本与中文说明（只读，便于识别后决定修改）"):
                 st.session_state.show_current_strategy = True
                 for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
