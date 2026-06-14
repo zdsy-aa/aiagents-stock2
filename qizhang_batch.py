@@ -33,6 +33,13 @@ def build_ranked_picks(codes, scores, topn=TOPN):
             for i, j in enumerate(order)]
 
 
+def attach_names(picks, name_map):
+    """给 picks 填 name(code->name 映射;缺失留空)。原地修改并返回。"""
+    for p in picks:
+        p["name"] = name_map.get(p["code"], "")
+    return picks
+
+
 def is_riskoff(date, riskoff_set):
     """该交易日上证是否 risk-off(<MA20)。date/riskoff_set 元素均 datetime64[D]。"""
     return np.datetime64(date, "D") in riskoff_set
@@ -99,6 +106,7 @@ def run_daily(db, limit=0):
     import setup_modeling as SM
     import setup_backtest as BT
     from mine_commonality import _load_kline
+    from chanlun_universe import _name_map
 
     scan_date = _today_str()
     try:
@@ -135,8 +143,8 @@ def run_daily(db, limit=0):
             logger.info("[起涨] %s risk-off(上证<MA20),今日不开新仓", scan_date)
         else:
             picks = build_ranked_picks(today_codes, sc, topn=TOPN)
+            attach_names(picks, _name_map())
             for p in picks:
-                p["name"] = ""  # 名称非必需,留空(前台可后补);避免额外依赖
                 df = _load_kline(p["code"])
                 p["entry_ref_price"] = (float(df["Close"].iloc[-1])
                                         if df is not None and len(df) else None)
