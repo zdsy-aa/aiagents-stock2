@@ -135,6 +135,34 @@ services:
     networks:
       - agentsstock-network
 
+  # 起涨预测 paper-tracking 每日 sidecar：复用主应用镜像，每天 20:30
+  # （kline 18:00 / chanlun 20:00 之后）跑 qizhang_batch，写 data/qizhang_picks.db，
+  # 供「📈 起涨预测」页只读。纯观察,不下单/不发邮件。
+  qizhang-updater:
+    image: aiagents-stock-app
+    container_name: qizhang-updater
+    logging: *default-logging
+    command: ["sh", "/app/qizhang_schedule.sh"]
+    environment:
+      - TZ=Asia/Shanghai
+      - LOCAL_DB_DIR=/app/tdx-data/database/kline
+      - QIZHANG_RUN_AT=20:30
+    volumes:
+      - ./data:/app/data                 # 写 qizhang_picks.db / qizhang_update.log
+      - ./.env:/app/.env
+      - ./tdx-data:/app/tdx-data:ro      # 只读本地K线（route B）
+      - ./qizhang_schedule.sh:/app/qizhang_schedule.sh:ro
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    depends_on:
+      tdx-stock-web:
+        condition: service_healthy
+      aktools:
+        condition: service_healthy
+    networks:
+      - agentsstock-network
+
 networks:
   agentsstock-network:
     driver: bridge
