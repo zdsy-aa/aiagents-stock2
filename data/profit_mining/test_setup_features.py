@@ -35,7 +35,26 @@ def test_label_zz():
     assert y.sum() >= 1, y.sum()
     assert set(np.unique(y[~np.isnan(y)])) <= {0.0, 1.0}
 
+def test_label_excess():
+    n = 60
+    idx = pd.date_range("2015-01-01", periods=n, freq="D")
+    stock = pd.Series([10.0]*5 + [13.0]*55, index=idx)
+    big = pd.Series([100.0]*n, index=idx)
+    d = pd.DataFrame({"Open": stock, "High": stock, "Low": stock, "Close": stock,
+                      "Volume": pd.Series([1.0]*n, index=idx)}, index=idx)
+    y = SF.label_excess(d, big, H=20, X=0.10)
+    assert y[0] == 1.0, y[0]
+    assert np.isnan(y[n-1])
+    stock2 = pd.Series(np.linspace(10, 13, n), index=idx)
+    big2 = pd.Series(np.linspace(100, 130, n), index=idx)
+    d2 = pd.DataFrame({"Open": stock2, "High": stock2, "Low": stock2, "Close": stock2,
+                       "Volume": pd.Series([1.0]*n, index=idx)}, index=idx)
+    y2 = SF.label_excess(d2, big2, H=20, X=0.10)
+    assert y2[0] == 0.0, y2[0]
+    assert np.isnan(SF.label_excess(d, None)).all()
+
 if __name__ == "__main__":
     test_feature_cols_count(); test_no_future_leak()
     test_label_fwd(); test_label_zz()
+    test_label_excess();
     print("ALL setup_features OK")
