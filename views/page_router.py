@@ -124,6 +124,11 @@ def route_page() -> bool:
         display_stable_selector()
         return True
 
+    if st.session_state.get('show_qizhang'):
+        from qizhang_predict_ui import display_qizhang_predict
+        display_qizhang_predict()
+        return True
+
     # 检查是否显示「当前策略」只读总览页
     if 'show_current_strategy' in st.session_state and st.session_state.show_current_strategy:
         from current_strategy_ui import display_current_strategy
