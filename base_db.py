@@ -23,15 +23,25 @@ class BaseDatabase:
             os.makedirs(db_dir, exist_ok=True)
         self.init_tables()
 
-    @contextmanager
-    def conn(self):
-        """获取数据库连接的上下文管理器 (P2 整改十: 自动 commit)"""
-        # 设置超时时间为 30 秒
+    def _connect(self, row_factory=None):
+        """创建一个已配置(WAL + busy_timeout)的原始连接。
+
+        统一连接工厂:conn() 与子类(如 NewsFlowDatabase.get_connection)都复用此处，
+        避免重复 sqlite3.connect / PRAGMA 配置。row_factory 可选(如 sqlite3.Row 支持按列名访问)。
+        调用方负责关闭返回的连接。
+        """
         c = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA busy_timeout=30000")
+        if row_factory is not None:
+            c.row_factory = row_factory
+        return c
+
+    @contextmanager
+    def conn(self, row_factory=None):
+        """获取数据库连接的上下文管理器 (P2 整改十: 自动 commit)"""
+        c = self._connect(row_factory)
         try:
-            # 每次连接都强制设置 WAL 和 busy_timeout
-            c.execute("PRAGMA journal_mode=WAL")
-            c.execute("PRAGMA busy_timeout=30000")
             yield c
             # P2 整改十: 成功则自动提交
             c.commit()

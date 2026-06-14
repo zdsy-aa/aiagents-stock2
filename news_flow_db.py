@@ -25,14 +25,10 @@ class NewsFlowDatabase(BaseDatabase):
         """获取数据库连接（兼容历史方法：sqlite3.Row 行工厂 + WAL/超时配置）
 
         说明：基类 BaseDatabase.conn() 返回的是普通元组连接，而历史查询方法依赖
-        按列名访问（row['col']）与 dict(row)，因此这里单独提供带 Row 行工厂的连接。
-        WAL + busy_timeout 与基类保持一致，避免并发锁问题。
+        按列名访问（row['col']）与 dict(row)，因此这里复用基类连接工厂并加 Row 行工厂。
+        WAL + busy_timeout 由基类 _connect 统一配置，避免重复 boilerplate。
         """
-        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=30000")
-        return conn
+        return self._connect(row_factory=sqlite3.Row)
 
     def init_tables(self):
         """初始化数据库表"""
