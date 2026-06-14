@@ -133,7 +133,8 @@ def _panel_proc(code):
                 ys.append(SF.label_excess(df, _IDX["close"], **kw))
         Y = np.column_stack(ys)
         dates = df.index.to_numpy().astype("datetime64[D]")
-        return X.astype(np.float32), Y.astype(np.float32), dates
+        codes = np.full(len(dates), code, dtype=object)
+        return X.astype(np.float32), Y.astype(np.float32), dates, codes
     except Exception:
         return None
 
@@ -146,17 +147,18 @@ def build_panel(limit=0):
     if limit:
         codes = codes[:limit]
     nproc = int(os.getenv("NPROC", "8"))
-    Xs, Ys, dts = [], [], []
+    Xs, Ys, dts, css = [], [], [], []
     with Pool(nproc) as p:
         for r in p.imap_unordered(_panel_proc, codes, chunksize=8):
             if r is None:
                 continue
-            X, Y, dates = r
-            Xs.append(X); Ys.append(Y); dts.append(dates)
+            X, Y, dates, cs = r
+            Xs.append(X); Ys.append(Y); dts.append(dates); css.append(cs)
     X = np.vstack(Xs); Y = np.vstack(Ys)
     dates = np.concatenate(dts).astype("datetime64[D]")
+    code_arr = np.concatenate(css)
     names = np.array([n for n, _, _ in LABELS])
-    np.savez(PANEL, X=X, Y=Y, dates=dates.astype("int64"),
+    np.savez(PANEL, X=X, Y=Y, dates=dates.astype("int64"), codes=code_arr,
              cols=np.array(SF.FEATURE_COLS), label_names=names)
     return X, Y, dates
 
