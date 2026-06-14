@@ -46,6 +46,7 @@
 | 文件 | 生产脚本 | 说明 |
 |------|---------|------|
 | `每日自选股清单.csv` | daily_watchlist.py | 当日稳定选股清单(前台/邮件) |
+| `../qizhang_picks.db` | qizhang_batch.py(根目录) | 起涨预测 paper-tracking:daily_picks/realized/run_meta;每日 sidecar(qizhang-updater 20:30)写,「📈 起涨预测」页只读。保留勿删(可重跑覆盖);伴 `../qizhang_update.log` |
 
 > 注：`commonality_reports/` 下的挖掘报告（`方案AB_共性横向对比_*.md` 等）按时间戳归档，
 > 同样保留；研究报告另拷 `/home/tdxback/report/`。
