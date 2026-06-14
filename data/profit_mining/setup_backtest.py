@@ -125,8 +125,9 @@ def score_oos(label="fwd_10_10"):
     return dates[valid_oos], codes[valid_oos], sc.astype(float)
 
 
-def run_backtest(dates, codes, scores):
-    """逐日 top-N 选股(在持去重) -> 每笔 _load_kline 定位 t+1 模拟 -> trades list。"""
+def run_backtest(dates, codes, scores, mode="fixed", maxhold=MAXHOLD, riskoff=None):
+    """逐日 top-N 选股(在持去重) -> 每笔模拟。mode 透传 simulate_trade;riskoff=不开新仓的日期集合(择时)。"""
+    riskoff = riskoff or set()
     uniq_days = np.unique(dates)
     by_day = {}
     for dt, cd, s in zip(dates, codes, scores):
@@ -137,11 +138,13 @@ def run_backtest(dates, codes, scores):
         if code not in kl_cache:
             kl_cache[code] = _load_kline(code)
         return kl_cache[code]
-    held = {}   # code -> exit_date; 持仓中不重复买
+    held = {}
     trades = []
     for dt in uniq_days:
         for cd in [c for c, ed in held.items() if ed <= dt]:
             del held[cd]
+        if dt in riskoff:
+            continue
         cs, ss = by_day[dt]
         for cd in select_topn(cs, np.array(ss), set(held.keys()), TOPN):
             df = kl(cd)
@@ -152,7 +155,8 @@ def run_backtest(dates, codes, scores):
                 continue
             o = df["Open"].to_numpy(float); h = df["High"].to_numpy(float)
             lo = df["Low"].to_numpy(float); c = df["Close"].to_numpy(float)
-            r = simulate_trade(o, h, lo, c, t + 1)
+            ma = _ma(c, 10) if mode == "trend" else None
+            r = simulate_trade(o, h, lo, c, t + 1, mode=mode, maxhold=maxhold, ma=ma)
             if r is None:
                 continue
             exit_idx, gross, net, reason = r
@@ -185,37 +189,74 @@ def _bench_curve(days):
     return v / v[0]
 
 
+def _riskoff_days():
+    """上证收盘<MA20 的交易日集合(datetime64[D]) -> 择时不开新仓。"""
+    import pandas as pd
+    ic = SM._load_index_close()
+    ma20 = ic.rolling(20).mean()
+    ro = ic.index[(ic < ma20).fillna(False)]
+    return set(pd.DatetimeIndex(ro).values.astype("datetime64[D]"))
+
+
+_CONFIGS = [
+    ("C0_fixed",          "fixed",    10, False),
+    ("C1_trailing",       "trailing", 30, False),
+    ("C2_trend",          "trend",    30, False),
+    ("C3_fixed_timing",   "fixed",    10, True),
+    ("C4_trailing_timing","trailing", 30, True),
+    ("C5_trend_timing",   "trend",    30, True),
+]
+
+
+def _eval_config(name, mode, maxhold, timing, dates, codes, scores, days, bench, riskoff):
+    trades = run_backtest(dates, codes, scores, mode=mode, maxhold=maxhold,
+                          riskoff=(riskoff if timing else None))
+    _, curve = portfolio_curve(trades, days)
+    nets = np.array([t["net"] for t in trades]) if trades else np.array([0.0])
+    drets = np.diff(np.concatenate([[1.0], curve])) / np.concatenate([[1.0], curve[:-1]])
+    reasons = {}
+    for t in trades:
+        reasons[t["reason"]] = reasons.get(t["reason"], 0) + 1
+    excess = cum_return(curve) - (bench[-1] / bench[0] - 1)
+    return dict(name=name, n=len(trades), win=(nets > 0).mean(), avg=nets.mean(),
+                cum=cum_return(curve), ann=annual_return(curve, len(days)),
+                sharpe=sharpe(drets), mdd=max_drawdown(curve), excess=excess, reasons=reasons)
+
+
 def main():
     t0 = time.time()
     dates, codes, scores = score_oos("fwd_10_10")
     print(f"  OOS打分 {len(scores)} bar", flush=True)
-    trades = run_backtest(dates, codes, scores)
-    oos_days = np.unique(dates)
-    days, curve = portfolio_curve(trades, oos_days)
+    days = np.unique(dates)
     bench = _bench_curve(days)
-    nets = np.array([t["net"] for t in trades]) if trades else np.array([0.0])
-    reasons = {}
-    for t in trades:
-        reasons[t["reason"]] = reasons.get(t["reason"], 0) + 1
-    drets = np.diff(np.concatenate([[1.0], curve])) / np.concatenate([[1.0], curve[:-1]])
+    riskoff = _riskoff_days()
+    rows = []
+    for name, mode, maxhold, timing in _CONFIGS:
+        r = _eval_config(name, mode, maxhold, timing, dates, codes, scores, days, bench, riskoff)
+        rows.append(r)
+        print(f"  {name}: 笔{r['n']} 胜率{r['win']:.3f} 累计{r['cum']:.3f} "
+              f"年化{r['ann']:.3f} Sharpe{r['sharpe']:.2f} 回撤{r['mdd']:.3f} 超额{r['excess']:.3f}", flush=True)
     ts = time.strftime("%Y%m%d_%H%M%S")
-    L = [f"# 起涨打分模型回测 (fwd_10_10 GBDT, OOS {SM.OOS_START}~{SM.OOS_END})\n",
-         f"生成 {ts}；策略: 每日top{TOPN}等权·t+1开盘买·止盈+{TP:.0%}/止损{SL:.0%}/持{MAXHOLD}日·扣{COST:.1%}成本\n",
-         f"## 笔级\n- 总笔数 {len(trades)};胜率(净>0) {(nets>0).mean():.3f};平均净收益 {nets.mean():.4f}",
-         f"- 退出占比: " + ", ".join(f"{k} {v}({v/max(len(trades),1):.0%})" for k, v in reasons.items()),
-         f"## 组合(槽位法 SLOTS={SLOTS})\n- 累计 {cum_return(curve):.3f};年化 {annual_return(curve,len(days)):.3f};"
-         f"Sharpe {sharpe(drets):.2f};最大回撤 {max_drawdown(curve):.3f}",
-         f"- 上证同期: 累计 {bench[-1]/bench[0]-1:.3f};**策略超额 {cum_return(curve)-(bench[-1]/bench[0]-1):.3f}**",
-         f"\n用时 {int(time.time()-t0)}s"]
-    out = f"/app/data/commonality_reports/起涨回测_{ts}.md"
+    bench_cum = bench[-1] / bench[0] - 1
+    L = [f"# 起涨回测v2 执行精细化对比 (fwd_10_10 GBDT, OOS {SM.OOS_START}~{SM.OOS_END})\n",
+         f"生成 {ts}；每日top{TOPN}等权·t+1开盘买·扣{COST:.1%}成本；上证同期累计 {bench_cum:.3f}\n",
+         "| 配置 | 退出 | 择时 | 笔数 | 胜率 | 平均净 | 累计 | 年化 | Sharpe | 最大回撤 | 超额(vs上证) |",
+         "|------|------|------|------|------|--------|------|------|--------|----------|--------------|"]
+    cfgmap = {c[0]: c for c in _CONFIGS}
+    for r in rows:
+        _, mode, mh, timing = cfgmap[r["name"]]
+        L.append(f"| {r['name']} | {mode} | {'是' if timing else '否'} | {r['n']} | {r['win']:.3f} | "
+                 f"{r['avg']:.4f} | {r['cum']:.3f} | {r['ann']:.3f} | {r['sharpe']:.2f} | {r['mdd']:.3f} | "
+                 f"**{r['excess']:+.3f}** |")
+    best = max(rows, key=lambda r: r["excess"])
+    L.append(f"\n## 结论\n- **最优配置: {best['name']}** 超额 {best['excess']:+.3f}(累计{best['cum']:.3f} vs 上证{bench_cum:.3f})")
+    L.append("- 退出占比(各配置): " + " | ".join(
+        f"{r['name']}:" + ",".join(f"{k}{v}" for k, v in r["reasons"].items()) for r in rows))
+    out = f"/app/data/commonality_reports/起涨回测v2_多配置_{ts}.md"
     os.makedirs(os.path.dirname(out), exist_ok=True)
     open(out, "w", encoding="utf-8").write("\n".join(L) + "\n")
-    import csv as _csv
-    with open(f"/app/data/commonality_reports/起涨回测_净值_{ts}.csv", "w", newline="", encoding="utf-8-sig") as f:
-        w = _csv.writer(f); w.writerow(["date", "strategy", "bench"])
-        for dd, sv, bv in zip(days, curve, bench):
-            w.writerow([str(dd), f"{sv:.6f}", f"{bv:.6f}"])
     print("\n".join(L), flush=True); print("  写", out, flush=True)
+    print(f"  用时{int(time.time()-t0)}s", flush=True)
 
 
 if __name__ == "__main__":
