@@ -39,6 +39,14 @@ def test_is_riskoff():
     assert QB.is_riskoff(np.datetime64("2026-06-11"), ro) is False
 
 
+def test_attach_names_fills_from_map_and_blank_when_missing():
+    picks = [{"code": "000001", "score": 1.0, "rank": 1},
+             {"code": "999000", "score": 0.5, "rank": 2}]
+    QB.attach_names(picks, {"000001": "平安银行"})
+    assert picks[0]["name"] == "平安银行"
+    assert picks[1]["name"] == ""  # 缺失留空
+
+
 def _kline(opens, highs, lows, closes, start="2026-01-01"):
     idx = pd.bdate_range(start, periods=len(opens))
     return pd.DataFrame({"Open": opens, "High": highs, "Low": lows, "Close": closes}, index=idx)
