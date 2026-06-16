@@ -2,6 +2,9 @@
 import os
 import numpy as np
 
+# 起涨/起跌初期窗口 = 拐点后 [L, L+_FWD]（共 _FWD+1 根）；可经环境变量 QZ_FWD 覆盖(默认4→5根)。
+_FWD = int(os.getenv("QZ_FWD", "4"))
+
 
 def count_for_signal(signal, windows):
     """signal: bool序列(len=n_bars)；windows: list[list[int]] (每段的W=5正样本bar索引)。
@@ -243,7 +246,7 @@ def write_reports(rows, out_dir="/app/data/commonality_reports", ts=None,
         groups.setdefault((r["plan"], r["side"], r["pct"]), []).append(r)
     md_lines = ["# 方案A/B 涨跌前期共性 横向对比", "",
                 f"生成 {ts}，覆盖率门槛 {cover_min}，最佳可达取 Top{topn}",
-                "（窗口=拐点后[L,L+4]起涨/起跌初期；提升度=正样本bar命中率÷全体bar命中率）", ""]
+                f"（窗口=拐点后[L,L+{_FWD}]（共{_FWD + 1}根）起涨/起跌初期；提升度=正样本bar命中率÷全体bar命中率）", ""]
     for (plan, side, pct), grp in sorted(groups.items()):
         zz = f"zz{int(pct * 100)}"
         kept = filter_rank(grp, cover_min)                         # 达标主榜
@@ -439,7 +442,7 @@ def _proc(code):
               "size": GD.size_group(ctx["mktcap_map"].get(code), ctx["size_cuts"]),
               "vol_cuts": ctx["vol_cuts"],
               "industry": GD.industry_group(ctx["industry_map"].get(code))}
-    return accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=4, groups=groups)
+    return accumulate_stock(df, pcts=DEFAULT_PCTS, fwd=_FWD, groups=groups)
 
 
 def main():
