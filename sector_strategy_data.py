@@ -407,73 +407,20 @@ class SectorStrategyDataFetcher:
         ]) or {}
 
     def _get_market_overview(self):
-        """获取市场总体情况"""
+        """获取市场总体情况（涨跌家数多源:新浪→东财；大盘指数多源:腾讯→新浪→东财）。"""
         try:
-            # 获取A股市场统计
             overview = {}
-            
-            # 涨跌家数
-            try:
-                df_stat = self._safe_request(ak.stock_zh_a_spot_em)
-                if df_stat is not None and not df_stat.empty:
-                    total_count = len(df_stat)
-                    up_count = len(df_stat[df_stat['涨跌幅'] > 0])
-                    down_count = len(df_stat[df_stat['涨跌幅'] < 0])
-                    flat_count = total_count - up_count - down_count
-                    
-                    overview["total_stocks"] = total_count
-                    overview["up_count"] = up_count
-                    overview["down_count"] = down_count
-                    overview["flat_count"] = flat_count
-                    overview["up_ratio"] = round(up_count / total_count * 100, 2) if total_count > 0 else 0
-                    
-                    # 涨停跌停
-                    limit_up = len(df_stat[df_stat['涨跌幅'] >= 9.5])
-                    limit_down = len(df_stat[df_stat['涨跌幅'] <= -9.5])
-                    overview["limit_up"] = limit_up
-                    overview["limit_down"] = limit_down
-            except Exception:
-                pass
-            
-            # 大盘指数
-            try:
-                # 上证指数
-                df_sh = ak.stock_zh_index_spot_em(symbol="上证指数")
-                if df_sh is not None and not df_sh.empty:
-                    overview["sh_index"] = {
-                        "code": "000001",
-                        "name": "上证指数",
-                        "close": df_sh.iloc[0].get('最新价', 0),
-                        "change_pct": df_sh.iloc[0].get('涨跌幅', 0),
-                        "change": df_sh.iloc[0].get('涨跌额', 0)
-                    }
-                
-                # 深证成指
-                df_sz = self._safe_request(ak.stock_zh_index_spot_em, symbol="深证成指")
-                if df_sz is not None and not df_sz.empty:
-                    overview["sz_index"] = {
-                        "code": "399001",
-                        "name": "深证成指",
-                        "close": df_sz.iloc[0].get('最新价', 0),
-                        "change_pct": df_sz.iloc[0].get('涨跌幅', 0),
-                        "change": df_sz.iloc[0].get('涨跌额', 0)
-                    }
-                
-                # 创业板指
-                df_cyb = self._safe_request(ak.stock_zh_index_spot_em, symbol="创业板指")
-                if df_cyb is not None and not df_cyb.empty:
-                    overview["cyb_index"] = {
-                        "code": "399006",
-                        "name": "创业板指",
-                        "close": df_cyb.iloc[0].get('最新价', 0),
-                        "change_pct": df_cyb.iloc[0].get('涨跌幅', 0),
-                        "change": df_cyb.iloc[0].get('涨跌额', 0)
-                    }
-            except Exception:
-                pass
-            
+            # 涨跌家数/涨停：新浪全A → 东财全A
+            spot = _try_sources([
+                ("新浪全A", ak.stock_zh_a_spot, 40),
+                ("东财全A", ak.stock_zh_a_spot_em, 8),
+            ])
+            if spot is not None and not spot.empty:
+                overview.update(_breadth_from_spot(spot))
+
+            # 大盘指数：腾讯 → 新浪 → 东财
+            overview.update(self._get_index_quotes())
             return overview
-            
         except Exception as e:
             logger.error(f"    获取市场概况失败: {e}")
             return {}
