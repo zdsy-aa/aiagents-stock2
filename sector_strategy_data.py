@@ -424,7 +424,7 @@ class SectorStrategyDataFetcher:
             overview = {}
             # 涨跌家数/涨停：新浪全A → 东财全A
             spot = _try_sources([
-                ("新浪全A", ak.stock_zh_a_spot, 40),
+                ("新浪全A", ak.stock_zh_a_spot, 90),   # 70 分页请求,实测 16~47s 波动,放宽到 90s
                 ("东财全A", ak.stock_zh_a_spot_em, 8),
             ])
             if spot is not None and not spot.empty:
