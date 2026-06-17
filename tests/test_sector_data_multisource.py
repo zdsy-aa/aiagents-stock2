@@ -52,3 +52,26 @@ def test_try_sources_falls_through_and_returns_first_ok():
 def test_try_sources_all_fail_returns_none():
     assert _try_sources([("a", lambda: None, 2),
                          ("b", lambda: (_ for _ in ()).throw(ValueError()), 2)]) is None
+
+
+def test_get_index_quotes_uses_tencent_first(monkeypatch):
+    f = SectorStrategyDataFetcher()
+    monkeypatch.setattr(f, "_index_from_tencent", lambda: {
+        "sh_index": {"code": "000001", "name": "上证指数", "close": 4108.08, "change_pct": 0.4, "change": 16.19},
+        "sz_index": {"code": "399001", "name": "深证成指", "close": 15745.0, "change_pct": 0.5, "change": 70.0},
+        "cyb_index": {"code": "399006", "name": "创业板指", "close": 4107.0, "change_pct": 0.6, "change": 20.0},
+    })
+    monkeypatch.setattr(f, "_index_from_sina", lambda: (_ for _ in ()).throw(AssertionError("不应走新浪")))
+    q = f._get_index_quotes()
+    assert q["sh_index"]["close"] == 4108.08
+    assert q["cyb_index"]["code"] == "399006"
+
+
+def test_get_index_quotes_falls_to_sina_when_tencent_empty(monkeypatch):
+    f = SectorStrategyDataFetcher()
+    monkeypatch.setattr(f, "_index_from_tencent", lambda: {})
+    monkeypatch.setattr(f, "_index_from_sina", lambda: {
+        "sh_index": {"code": "000001", "name": "上证指数", "close": 4083.86, "change_pct": -0.2, "change": -8.0},
+    })
+    q = f._get_index_quotes()
+    assert q["sh_index"]["close"] == 4083.86
