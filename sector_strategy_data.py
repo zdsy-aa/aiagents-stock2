@@ -8,10 +8,35 @@ import pandas as pd
 from datetime import datetime, timedelta
 import warnings
 import time
+import threading
 import logging
 import os
 from dotenv import load_dotenv
 from sector_strategy_db import SectorStrategyDatabase
+
+# 财经新闻抓取每源超时(秒)：新闻是 AI 的次要输入，源抽风时(akshare 无超时可挂起 ~8min/次)
+# 不应拖死整个智策任务，超时即视为空新闻继续。
+NEWS_FETCH_TIMEOUT = 30
+
+
+def _call_with_timeout(func, timeout_sec):
+    """在 daemon 线程跑 func，超时或异常返回 None。
+
+    超时时挂起线程为 daemon，不阻塞进程退出（批处理结束即回收）；
+    用于给无超时的第三方抓取(akshare)套一层硬上限。
+    """
+    box = {}
+
+    def _run():
+        try:
+            box["v"] = func()
+        except Exception:
+            box["v"] = None
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout_sec)
+    return box.get("v")
 
 logger = logging.getLogger(__name__)
 
@@ -462,7 +487,7 @@ class SectorStrategyDataFetcher:
         # 主源：财联社全球电报（列：标题/内容/发布日期/发布时间）
         if hasattr(ak, 'stock_info_global_cls'):
             try:
-                df = self._safe_request(ak.stock_info_global_cls)
+                df = _call_with_timeout(ak.stock_info_global_cls, NEWS_FETCH_TIMEOUT)
                 if df is not None and not df.empty:
                     news_list = []
                     for _, row in df.head(150).iterrows():
@@ -481,7 +506,7 @@ class SectorStrategyDataFetcher:
         # 备源：东财全球财经快讯（列：标题/摘要/发布时间/链接）
         if hasattr(ak, 'stock_info_global_em'):
             try:
-                df = self._safe_request(ak.stock_info_global_em)
+                df = _call_with_timeout(ak.stock_info_global_em, NEWS_FETCH_TIMEOUT)
                 if df is not None and not df.empty:
                     news_list = []
                     for _, row in df.head(150).iterrows():
@@ -599,7 +624,14 @@ class SectorStrategyDataFetcher:
                 text_parts.append(f"{idx}. [{news['publish_time']}] {news['title']}")
                 if news.get('content') and len(news['content']) > 100:
                     text_parts.append(f"   {news['content'][:100]}...")
-        
+        else:
+            # 新闻抓取失败/超时 → 显式提示，禁止 AI 臆测消息面（防幻觉编造新闻）
+            text_parts.append("""
+【财经新闻】
+本次未获取到财经新闻数据。请仅依据上述量化数据（板块行情/资金流向/北向资金）进行研判，
+不要臆测或编造消息面/新闻事件；如需提示消息面风险，仅可笼统说明"本次缺新闻数据，消息面待确认"。
+""")
+
         return "\n".join(text_parts)
     
     def _save_raw_data_to_db(self, data):
