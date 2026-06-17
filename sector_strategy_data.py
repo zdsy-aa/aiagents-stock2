@@ -231,6 +231,18 @@ class SectorStrategyDataFetcher:
                             "up_count": 0,            # 同花顺该接口无涨跌家数
                             "down_count": 0
                         }
+                # best-effort 换手率回填：同花顺无换手率→试东财板块接口(短超时);拿不到保持 0
+                if sectors and all(v.get("turnover", 0) in (0, None) for v in sectors.values()):
+                    try:
+                        em = _call_with_timeout(lambda: ak.stock_board_industry_name_em(), 15)
+                        if em is not None and not em.empty and "板块名称" in em.columns and "换手率" in em.columns:
+                            tmap = dict(zip(em["板块名称"], pd.to_numeric(em["换手率"], errors="coerce")))
+                            for nm, v in sectors.items():
+                                if nm in tmap and pd.notna(tmap[nm]):
+                                    v["turnover"] = float(tmap[nm])
+                            logger.info("    [换手率] 东财板块回填成功")
+                    except Exception as e:
+                        logger.info(f"    [换手率] 回填跳过: {e}")
                 return sectors
 
             # 兜底：东财行业板块（当前受反爬，多半失败）
@@ -646,7 +658,10 @@ class SectorStrategyDataFetcher:
 """)
             for name, info in sorted_sectors[-10:]:
                 text_parts.append(f"  {name}: {info['change_pct']:+.2f}% | 领跌: {info['top_stock']} ({info['top_stock_change']:+.2f}%)")
-        
+            # 板块换手率整体缺失(全 0)提示，防 AI 据 0 误判量能
+            if all((v.get("turnover", 0) in (0, None)) for v in sectors.values()):
+                text_parts.append("\n【数据说明】本次板块换手率本次暂缺（数据源未取到），请勿据换手率判断板块量能；其余量化数据正常。")
+
         # 概念板块表现（前20）
         if data.get("concepts"):
             concepts = data["concepts"]

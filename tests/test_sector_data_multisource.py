@@ -75,3 +75,23 @@ def test_get_index_quotes_falls_to_sina_when_tencent_empty(monkeypatch):
     })
     q = f._get_index_quotes()
     assert q["sh_index"]["close"] == 4083.86
+
+
+def test_format_includes_turnover_missing_note_when_all_zero():
+    f = SectorStrategyDataFetcher()
+    txt = f.format_data_for_ai({
+        "success": True,
+        "sectors": {"银行": {"change_pct": 1.0, "turnover": 0, "top_stock": "A",
+                            "top_stock_change": 2.0, "up_count": 5, "down_count": 1}},
+    })
+    assert "板块换手率本次暂缺" in txt
+
+
+def test_format_no_turnover_note_when_present():
+    f = SectorStrategyDataFetcher()
+    txt = f.format_data_for_ai({
+        "success": True,
+        "sectors": {"银行": {"change_pct": 1.0, "turnover": 3.5, "top_stock": "A",
+                            "top_stock_change": 2.0, "up_count": 5, "down_count": 1}},
+    })
+    assert "板块换手率本次暂缺" not in txt
