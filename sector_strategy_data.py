@@ -38,6 +38,60 @@ def _call_with_timeout(func, timeout_sec):
     t.join(timeout_sec)
     return box.get("v")
 
+
+def _try_sources(sources):
+    """按序尝试 (label, callable, timeout_sec)，第一个返回非空(非 None、非空 DataFrame/dict/list)即用。
+
+    每源用 _call_with_timeout 套硬超时；异常/超时/空 → 试下一个；全失败返回 None。
+    """
+    import logging as _lg
+    log = _lg.getLogger(__name__)
+    for label, fn, timeout_sec in sources:
+        r = _call_with_timeout(fn, timeout_sec)
+        empty = (r is None) or (hasattr(r, "empty") and r.empty) or \
+                (isinstance(r, (dict, list)) and len(r) == 0)
+        if not empty:
+            log.info("    [多源] 命中: %s", label)
+            return r
+        log.info("    [多源] 跳过(空/超时): %s", label)
+    return None
+
+
+def _breadth_from_spot(df):
+    """全A快照 df(含'涨跌幅'列) -> 涨跌家数/涨停跌停 统计 dict。"""
+    out = {}
+    if df is None or df.empty or "涨跌幅" not in df.columns:
+        out["total_stocks"] = 0
+        return out
+    pct = pd.to_numeric(df["涨跌幅"], errors="coerce").dropna()
+    total = len(pct)
+    up = int((pct > 0).sum()); down = int((pct < 0).sum()); flat = total - up - down
+    out.update({
+        "total_stocks": total, "up_count": up, "down_count": down, "flat_count": flat,
+        "up_ratio": round(up / total * 100, 2) if total else 0,
+        "limit_up": int((pct >= 9.5).sum()), "limit_down": int((pct <= -9.5).sum()),
+    })
+    return out
+
+
+def _parse_tencent_index(raw_text):
+    """腾讯 qt.gtimg 指数报文 -> {code: {close, change_pct, change}}。
+    每行 v_xxx="名称~代码~最新价~...~涨跌额~涨跌幅~..."；f[1]名 f[2]码 f[3]最新 f[31]涨跌额 f[32]涨跌幅。"""
+    out = {}
+    for line in str(raw_text).strip().split("\n"):
+        if "~" not in line or '="' not in line:
+            continue
+        try:
+            payload = line.split('="', 1)[1].rstrip('";')
+            f = payload.split("~")
+            if len(f) <= 32:
+                continue
+            out[f[2]] = {"close": float(f[3]), "change": float(f[31]), "change_pct": float(f[32])}
+        except (ValueError, IndexError):
+            continue
+    return out
+
+
 logger = logging.getLogger(__name__)
 
 # 加载环境变量
