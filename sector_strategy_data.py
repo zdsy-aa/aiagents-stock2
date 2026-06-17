@@ -351,6 +351,61 @@ class SectorStrategyDataFetcher:
             logger.error(f"    获取行业资金流向失败: {e}")
             return {}
     
+    _INDEX_MAP = [("sh_index", "000001", "上证指数"),
+                  ("sz_index", "399001", "深证成指"),
+                  ("cyb_index", "399006", "创业板指")]
+
+    def _index_from_tencent(self):
+        import urllib.request
+        raw = urllib.request.urlopen(
+            "https://qt.gtimg.cn/q=sh000001,sz399001,sz399006", timeout=8).read().decode("gbk")
+        parsed = _parse_tencent_index(raw)   # {code: {close,change,change_pct}}
+        out = {}
+        for key, code, name in self._INDEX_MAP:
+            if code in parsed:
+                out[key] = {"code": code, "name": name, **parsed[code]}
+        return out
+
+    def _index_from_sina(self):
+        df = ak.stock_zh_index_spot_sina()
+        if df is None or df.empty:
+            return {}
+        out = {}
+        for key, code, name in self._INDEX_MAP:
+            hit = df[df["名称"] == name]
+            if not hit.empty:
+                r = hit.iloc[0]
+                out[key] = {"code": code, "name": name,
+                            "close": float(r.get("最新价", 0)),
+                            "change_pct": float(r.get("涨跌幅", 0)),
+                            "change": float(r.get("涨跌额", 0))}
+        return out
+
+    def _index_from_em(self):
+        out = {}
+        try:
+            df = ak.stock_zh_index_spot_em(symbol="上证系列指数")
+        except Exception:
+            df = None
+        if df is not None and not df.empty and "名称" in df.columns:
+            for key, code, name in self._INDEX_MAP:
+                hit = df[df["名称"] == name]
+                if not hit.empty:
+                    r = hit.iloc[0]
+                    out[key] = {"code": code, "name": name,
+                                "close": float(r.get("最新价", 0)),
+                                "change_pct": float(r.get("涨跌幅", 0)),
+                                "change": float(r.get("涨跌额", 0))}
+        return out
+
+    def _get_index_quotes(self):
+        """大盘指数多源链：腾讯(0.3s)→新浪(1.2s)→东财(兜底)。返回 {sh_index,sz_index,cyb_index} 部分/全部。"""
+        return _try_sources([
+            ("腾讯指数", self._index_from_tencent, 8),
+            ("新浪指数", self._index_from_sina, 15),
+            ("东财指数", self._index_from_em, 6),
+        ]) or {}
+
     def _get_market_overview(self):
         """获取市场总体情况"""
         try:
