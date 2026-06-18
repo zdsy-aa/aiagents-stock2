@@ -129,6 +129,11 @@ def route_page() -> bool:
         display_qizhang_predict()
         return True
 
+    if st.session_state.get('show_chanlun_chart'):
+        from chanlun_chart_ui import display_chanlun_chart
+        display_chanlun_chart()
+        return True
+
     # 检查是否显示「当前策略」只读总览页
     if 'show_current_strategy' in st.session_state and st.session_state.show_current_strategy:
         from current_strategy_ui import display_current_strategy

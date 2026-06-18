@@ -32,6 +32,7 @@ PAGE_FLAGS = [
     "show_chanlun",
     "show_current_strategy",
     "show_qizhang",
+    "show_chanlun_chart",
 ]
 
 
