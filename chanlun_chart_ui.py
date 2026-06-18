@@ -78,6 +78,32 @@ def build_chart(df, result, future_days):
         x=x, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
         increasing_line_color="#d33", decreasing_line_color="#3a3", name="K线")])
 
+    # 笔：相邻分型转折点连成的细折线（顶点=笔端点；点击图例可隐藏）
+    if result.strokes:
+        bx, by = [], []
+        first = result.strokes[0]
+        if first.start.i < len(df):
+            bx.append(df.index[first.start.i]); by.append(first.start.price)
+        for s in result.strokes:
+            if s.end.i < len(df):
+                bx.append(df.index[s.end.i]); by.append(s.end.price)
+        if len(bx) >= 2:
+            fig.add_trace(go.Scatter(x=bx, y=by, mode="lines", name="笔",
+                                     line=dict(color="rgba(230,150,40,0.85)", width=1)))
+
+    # 线段：段端点连成的粗折线（更高级别，盖在笔之上）
+    if result.segments:
+        sx, sy = [], []
+        first = result.segments[0]
+        if first.i_start < len(df):
+            sx.append(df.index[first.i_start]); sy.append(first.p_start)
+        for s in result.segments:
+            if s.i_end < len(df):
+                sx.append(df.index[s.i_end]); sy.append(s.p_end)
+        if len(sx) >= 2:
+            fig.add_trace(go.Scatter(x=sx, y=sy, mode="lines", name="线段",
+                                     line=dict(color="rgba(40,90,200,0.95)", width=2)))
+
     # 中枢矩形（半透明）
     for pv in result.pivots:
         if pv.i_start < len(df) and pv.i_end < len(df):
