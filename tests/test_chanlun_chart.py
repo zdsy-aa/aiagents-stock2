@@ -62,3 +62,20 @@ def test_build_chart_returns_figure():
     fig = build_chart(df, r, fut)
     assert isinstance(fig, go.Figure)
     assert len(fig.data) >= 1
+
+
+def test_build_chart_has_stroke_and_segment_lines():
+    import plotly.graph_objects as go
+    from chanlun_engine import Stroke, Fractal
+    from chanlun_chart_ui import build_chart
+    df = _df()
+    strokes = [Stroke(dir="up", start=Fractal("bottom", 0, 2, 8.0), end=Fractal("top", 0, 10, 12.0)),
+               Stroke(dir="down", start=Fractal("top", 0, 10, 12.0), end=Fractal("bottom", 0, 18, 9.0))]
+    segs = [Segment(dir="up", i_start=2, i_end=10, p_start=8.0, p_end=12.0),
+            Segment(dir="down", i_start=10, i_end=18, p_start=12.0, p_end=9.0)]
+    r = _result(segments=segs)
+    r.strokes = strokes
+    fig = build_chart(df, r, [])
+    names = [t.name for t in fig.data]
+    assert "笔" in names
+    assert "线段" in names
