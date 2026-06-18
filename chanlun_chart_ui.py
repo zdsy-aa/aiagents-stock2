@@ -119,3 +119,58 @@ def build_chart(df, result, future_days):
     fig.update_layout(height=560, xaxis_rangeslider_visible=False,
                       margin=dict(l=10, r=60, t=30, b=10), showlegend=True)
     return fig
+
+
+def _load_kline_day(code):
+    import sys
+    if "/app/data/profit_mining" not in sys.path:
+        sys.path.insert(0, "/app/data/profit_mining")
+    from mine_commonality import _load_kline
+    return _load_kline(code)
+
+
+def display_chanlun_chart():
+    import streamlit as st
+    from chanlun_engine import analyze_one
+
+    st.header("📐 缠论图解（含未来3天条件信号）")
+    st.caption("输入股票代码 → 缠论日线图标注中枢/买卖点，并推演未来3个交易日的买卖点触发条件。")
+
+    code = st.text_input("股票代码（6位，如 600000 / 000001）", value="").strip()
+    if not st.button("📊 分析", type="primary") and not code:
+        st.info("请输入股票代码后点「分析」。")
+        return
+    if not code:
+        st.warning("请输入股票代码。")
+        return
+
+    try:
+        df = _load_kline_day(code)
+    except Exception as e:
+        logger.exception("缠论图解取K线失败")
+        st.error(f"取K线失败：{e}")
+        return
+    if df is None or len(df) < 60:
+        st.warning("无数据或样本不足（需≥60根日K）。请确认代码或本地K线覆盖。")
+        return
+
+    # 日期索引的 dfn 用于作图；reset_index 后行号 0..n-1 对齐缠论引擎(TradePoint.i/Pivot.i_*)
+    dfn = df.tail(N_BARS).copy()
+    res = analyze_one(dfn.reset_index(drop=True))
+
+    fut = _next_trading_days(dfn.index[-1])
+    fig = build_chart(dfn, res, fut)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("🔮 未来3个交易日 · 买卖点触发条件")
+    conds = forward_conditions(res, dfn)
+    if not conds:
+        st.info("当前结构未识别出可推演的买卖点条件（无中枢/买卖点）。")
+    else:
+        earliest = fut[0].strftime("%Y-%m-%d") if fut else ""
+        rows = [{"信号": c["signal"], "方向": c["direction"], "阈值价": c["level"],
+                 "最早可能日": earliest, "条件": c["text"], "置信": c["confidence"]} for c in conds]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
+    st.caption("⚠️ 缠论为结构化技术判断，非投资建议；未来条件为基于当前结构的推演，需后续K线走出确认；"
+               "1买/1卖的背驰条件为近似提示，不保证成立。")
