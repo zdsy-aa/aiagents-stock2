@@ -140,7 +140,17 @@ def render_sidebar():
                            'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull',
                            'show_small_cap', 'show_profit_growth', 'show_value_stock', 'show_news_flow',
                            'show_macro_analysis', 'show_macro_cycle', 'show_smart_monitor', 'show_intraday',
-                           'show_chanlun', 'show_liumai', 'show_combo', 'show_stable']:
+                           'show_chanlun', 'show_liumai', 'show_combo', 'show_stable', 'show_chanlun_chart']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+
+            if st.button("📐 缠论图解", width='stretch', key="nav_chanlun_chart", help="输入代码看缠论中枢/买卖点图 + 未来3天买卖点触发条件"):
+                st.session_state.show_chanlun_chart = True
+                for key in ['show_history', 'show_monitor', 'show_config', 'show_main_force',
+                           'show_sector_strategy', 'show_longhubang', 'show_portfolio', 'show_low_price_bull',
+                           'show_small_cap', 'show_profit_growth', 'show_value_stock', 'show_news_flow',
+                           'show_macro_analysis', 'show_macro_cycle', 'show_smart_monitor', 'show_intraday',
+                           'show_chanlun', 'show_liumai', 'show_combo', 'show_stable', 'show_qizhang']:
                     if key in st.session_state:
                         del st.session_state[key]
 
