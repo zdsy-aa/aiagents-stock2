@@ -46,3 +46,19 @@ def test_forward_1buy_from_down_segment_low_is_approx():
 def test_next_trading_days_skips_weekend():
     days = _next_trading_days("2026-06-19", n=3, is_trading_day=lambda d: pd.Timestamp(d).weekday() < 5)
     assert [str(d) for d in days] == ["2026-06-22", "2026-06-23", "2026-06-24"]
+
+
+def test_build_chart_returns_figure():
+    import plotly.graph_objects as go
+    from chanlun_chart_ui import build_chart
+    df = _df()
+    r = _result(
+        pivots=[Pivot(ZG=12.0, ZD=10.0, GG=13.0, DD=9.0, i_start=5, i_end=20, seg_count=3)],
+        points=[TradePoint("1买", 30, 9.3, "背驰"), TradePoint("3买", 50, 12.5, "上破中枢")],
+        segments=[Segment(dir="down", i_start=40, i_end=50, p_start=11.0, p_end=8.5)],
+    )
+    fut = [pd.Timestamp("2026-06-22").date(), pd.Timestamp("2026-06-23").date(),
+           pd.Timestamp("2026-06-24").date()]
+    fig = build_chart(df, r, fut)
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) >= 1
