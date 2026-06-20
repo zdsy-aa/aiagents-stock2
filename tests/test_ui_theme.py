@@ -6,11 +6,11 @@ from ui_theme import style_fig, candle_colors
 
 
 def test_theme_has_ashare_semantic_colors():
-    # A股惯例：涨红跌绿
-    assert THEME["up"] == "#e5384e"
-    assert THEME["down"] == "#0a9d63"
-    assert THEME["bg"] == "#f7f5f0"
-    assert THEME["accent"] == "#0891b2"
+    # A股惯例：涨红跌绿（冷白 SaaS 调色）
+    assert THEME["up"] == "#e11d48"
+    assert THEME["down"] == "#059669"
+    assert THEME["bg"] == "#f8fafc"
+    assert THEME["accent"] == "#2563eb"
 
 
 def test_build_theme_css_returns_style_block_with_tokens():
@@ -24,6 +24,7 @@ def test_build_theme_css_returns_style_block_with_tokens():
     # 卡片/区块标题工具类存在
     assert ".ftc-card" in css
     assert ".ftc-section" in css
+    assert "topnav" in css  # 顶部导航样式存在
 
 
 def test_pct_color_ashare_semantics():

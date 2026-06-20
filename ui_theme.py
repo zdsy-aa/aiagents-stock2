@@ -3,16 +3,16 @@
 全站 16 页同处一次 Streamlit run，启动调一次 inject_theme() 即全继承。"""
 
 THEME = {
-    "bg":        "#f7f5f0",   # 暖米白页底
-    "panel":     "#fffdf9",   # 面板/侧栏（近白）
+    "bg":        "#f8fafc",   # 冷调极浅灰页底（slate-50）
+    "panel":     "#ffffff",   # 面板/侧栏纯白
     "card":      "#ffffff",   # 卡片纯白
-    "border":    "#e6e0d4",   # 暖灰边框
-    "text":      "#2b2b2b",   # 主文字（深灰）
-    "text_dim":  "#6b7280",   # 次文字
-    "up":        "#e5384e",   # 涨（A股红，白底加深）
-    "down":      "#0a9d63",   # 跌（A股绿，白底加深）
-    "accent":    "#0891b2",   # 交互强调（青蓝，白底可读）
-    "gold":      "#c98a00",   # 点睛（白底加深）
+    "border":    "#e2e8f0",   # 冷灰边框（slate-200）
+    "text":      "#0f172a",   # 主文字（近黑冷调，slate-900）
+    "text_dim":  "#64748b",   # 次文字（slate-500）
+    "up":        "#e11d48",   # 涨（A股红，rose-600）
+    "down":      "#059669",   # 跌（A股绿，emerald-600）
+    "accent":    "#2563eb",   # 交互强调（SaaS 蓝，blue-600）
+    "gold":      "#d97706",   # 点睛（amber-600）
 }
 
 
@@ -90,6 +90,21 @@ p, span, label, li {{ color: {t['text']}; }}
 ::-webkit-scrollbar {{ width: 10px; height: 10px; }}
 ::-webkit-scrollbar-thumb {{ background: {t['border']}; border-radius: 6px; }}
 ::-webkit-scrollbar-track {{ background: {t['bg']}; }}
+
+/* === SaaS 精修 === */
+.ftc-card {{ box-shadow: 0 1px 3px rgba(15,23,42,.06); border-radius: 10px; }}
+/* primary 按钮=蓝底白字（顶部当前大类 / 侧栏当前页高亮） */
+.stButton > button[kind="primary"] {{
+    background: {t['accent']}; color: #fff; border: 1px solid {t['accent']};
+}}
+.stButton > button[kind="primary"]:hover {{ filter: brightness(1.08); color: #fff; }}
+.stButton > button[kind="secondary"] {{
+    background: {t['card']}; color: {t['text']}; border: 1px solid {t['border']};
+}}
+.stButton > button[kind="secondary"]:hover {{ border-color: {t['accent']}; color: {t['accent']}; }}
+/* 顶部导航条 */
+.topnav-bar {{ border-bottom: 1px solid {t['border']}; margin-bottom: 4px; }}
+.topnav-title {{ font-size: 1.4rem; font-weight: 800; color: {t['text']}; margin: 6px 0 12px; }}
 </style>"""
 
 
