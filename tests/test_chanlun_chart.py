@@ -79,3 +79,18 @@ def test_build_chart_has_stroke_and_segment_lines():
     names = [t.name for t in fig.data]
     assert "笔" in names
     assert "线段" in names
+
+
+def test_build_chart_has_fractal_and_diverge_traces():
+    from chanlun_engine import Fractal
+    from chanlun_chart_ui import build_chart
+    df = _df()
+    r = _result(
+        segments=[Segment(dir="down", i_start=40, i_end=50, p_start=11.0, p_end=8.5)],
+        points=[TradePoint("1买", 50, 8.5, "下跌段力度背驰")],
+    )
+    r.fractals = [Fractal("bottom", 0, 50, 8.5), Fractal("top", 0, 30, 12.0)]
+    fig = build_chart(df, r, [])
+    names = [t.name for t in fig.data]
+    assert "分型" in names
+    assert "背驰段" in names
