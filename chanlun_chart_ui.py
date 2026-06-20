@@ -104,6 +104,29 @@ def build_chart(df, result, future_days):
             fig.add_trace(go.Scatter(x=sx, y=sy, mode="lines", name="线段",
                                      line=dict(color="rgba(40,90,200,0.95)", width=2)))
 
+    # 分型点：顶▽红 / 底△绿（单 trace，逐点 symbol/color；默认显示）
+    fr = [f for f in result.fractals if f.i < len(df)]
+    if fr:
+        fig.add_trace(go.Scatter(
+            x=[df.index[f.i] for f in fr], y=[f.price for f in fr], mode="markers", name="分型",
+            marker=dict(size=7,
+                        symbol=["triangle-down" if f.kind == "top" else "triangle-up" for f in fr],
+                        color=["#e44" if f.kind == "top" else "#2a8" for f in fr]),
+            hovertext=["顶分型" if f.kind == "top" else "底分型" for f in fr], hoverinfo="text"))
+
+    # 背驰段高亮：note 含「背驰」的买卖点 → i_end==point.i 的线段，金色粗线（单 trace，None 分隔）
+    seg_by_end = {s.i_end: s for s in result.segments}
+    bx, by = [], []
+    for p in result.points:
+        if "背驰" in (p.note or "") and p.i in seg_by_end:
+            s = seg_by_end[p.i]
+            if s.i_start < len(df) and s.i_end < len(df):
+                bx += [df.index[s.i_start], df.index[s.i_end], None]
+                by += [s.p_start, s.p_end, None]
+    if bx:
+        fig.add_trace(go.Scatter(x=bx, y=by, mode="lines", name="背驰段",
+                                 line=dict(color="rgba(240,180,20,0.95)", width=4)))
+
     # 中枢矩形（半透明）
     for pv in result.pivots:
         if pv.i_start < len(df) and pv.i_end < len(df):
