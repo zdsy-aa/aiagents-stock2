@@ -69,8 +69,8 @@ def _next_trading_days(last_date, n=FUTURE_DAYS, is_trading_day=None):
     return out
 
 
-def build_chart(df, result, future_days):
-    """组装 plotly Figure：蜡烛 + 中枢矩形 + 买卖点 markers + 关键价位横线 + 未来决策区阴影。"""
+def build_chart(df, result, future_days, conditions=None):
+    """组装 plotly Figure：蜡烛 + 笔/线段 + 分型 + 背驰段 + 中枢 + 买卖点 + 关键价位 + 决策区 + 未来条件框。"""
     import plotly.graph_objects as go
 
     x = list(df.index)
@@ -164,6 +164,15 @@ def build_chart(df, result, future_days):
                       fillcolor="rgba(200,200,200,0.18)", line_width=0,
                       annotation_text="未来3日决策区(无真实K线)", annotation_position="top left")
         fig.update_xaxes(range=[x_all[0], x_all[-1]])
+
+    # 未来条件提示框：决策区内对每条 condition 在阈值价处标注（图文对应）
+    if conditions and future_days:
+        x_mid = pd.Timestamp(future_days[len(future_days) // 2])
+        for c in conditions:
+            verb = "站上" if c["direction"] == "up" else "跌破"
+            fig.add_annotation(x=x_mid, y=c["level"], text=f"{c['signal']} {verb}{c['level']}",
+                               showarrow=False, font=dict(size=9, color="#333"),
+                               bgcolor="rgba(255,245,200,0.9)", bordercolor="#caa", borderwidth=1)
 
     fig.update_layout(height=560, xaxis_rangeslider_visible=False,
                       margin=dict(l=10, r=60, t=30, b=10), showlegend=True)
