@@ -53,3 +53,11 @@ def test_current_strategy_page_shows_four_categories():
     for cat in ["选股", "买入卖出", "测试盈利", "找共同点"]:
         assert cat in text, cat
     assert "当前策略" in text
+
+
+def test_home_shows_top_nav_categories():
+    at = AppTest.from_file("app.py", default_timeout=180).run()
+    assert at.exception is None or at.exception == []
+    btn_labels = " ".join(b.label for b in at.button)
+    for cat in ("分析", "选股", "策略", "管理"):
+        assert cat in btn_labels

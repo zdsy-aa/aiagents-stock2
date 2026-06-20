@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # 页面三大块(侧栏/路由/主界面)已抽到 views/;app.py 仅做装配
 from views.sidebar import render_sidebar
+from views.top_nav import render_top_nav
 from views.page_router import route_page
 from views.analysis_home import render_analysis_home
 
@@ -41,6 +42,9 @@ def main():
 
     # 侧边栏(返回主界面所需的 api_key_status / period)
     api_key_status, period = render_sidebar()
+
+    # 顶部水平主导航（5 大类 + 当前页标题）
+    render_top_nav()
 
     # 功能页面路由：命中任一 show_* 即渲染该页并结束
     if route_page():
