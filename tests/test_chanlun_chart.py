@@ -94,3 +94,15 @@ def test_build_chart_has_fractal_and_diverge_traces():
     names = [t.name for t in fig.data]
     assert "分型" in names
     assert "背驰段" in names
+
+
+def test_build_chart_draws_condition_annotations():
+    from chanlun_chart_ui import build_chart, forward_conditions
+    df = _df()
+    r = _result(pivots=[Pivot(ZG=12.0, ZD=10.0, GG=13.0, DD=9.0, i_start=5, i_end=20, seg_count=3)])
+    conds = forward_conditions(r, df)
+    fut = [pd.Timestamp("2026-06-22").date(), pd.Timestamp("2026-06-23").date(),
+           pd.Timestamp("2026-06-24").date()]
+    fig = build_chart(df, r, fut, conditions=conds)
+    texts = " ".join(a.text for a in fig.layout.annotations)
+    assert "3买" in texts and "站上" in texts
