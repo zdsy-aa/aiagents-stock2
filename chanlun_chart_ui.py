@@ -187,9 +187,23 @@ def _load_kline_day(code):
     return _load_kline(code)
 
 
+def _load_kline_30m(code):
+    """取 30m K线(标准 OHLCV)，失败/无数据返回 None。复用 chanlun_batch._load。"""
+    try:
+        import sys
+        for p in ("/app", "/app/data/profit_mining"):
+            if p not in sys.path:
+                sys.path.insert(0, p)
+        from chanlun_batch import _load
+        return _load(code, "30min", 2000)
+    except Exception:
+        logger.info("30m K线取数失败，退回单级别")
+        return None
+
+
 def display_chanlun_chart():
     import streamlit as st
-    from chanlun_engine import analyze_one
+    from chanlun_engine import analyze
 
     st.header("📐 缠论图解（含未来3天条件信号）")
     st.caption("输入股票代码 → 缠论日线图标注中枢/买卖点，并推演未来3个交易日的买卖点触发条件。")
@@ -214,14 +228,16 @@ def display_chanlun_chart():
 
     # 日期索引的 dfn 用于作图；reset_index 后行号 0..n-1 对齐缠论引擎(TradePoint.i/Pivot.i_*)
     dfn = df.tail(N_BARS).copy()
-    res = analyze_one(dfn.reset_index(drop=True))
+    df_30m = _load_kline_30m(code)
+    df_30m_r = df_30m.reset_index(drop=True) if df_30m is not None else None
+    res = analyze(dfn.reset_index(drop=True), df_30m_r)   # 多级别(日线本级别 + 30m 次级别确认)
 
     fut = _next_trading_days(dfn.index[-1])
-    fig = build_chart(dfn, res, fut)
+    conds = forward_conditions(res, dfn)
+    fig = build_chart(dfn, res, fut, conditions=conds)
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("🔮 未来3个交易日 · 买卖点触发条件")
-    conds = forward_conditions(res, dfn)
     if not conds:
         st.info("当前结构未识别出可推演的买卖点条件（无中枢/买卖点）。")
     else:
@@ -229,6 +245,15 @@ def display_chanlun_chart():
         rows = [{"信号": c["signal"], "方向": c["direction"], "阈值价": c["level"],
                  "最早可能日": earliest, "条件": c["text"], "置信": c["confidence"]} for c in conds]
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
+    # 30m 次级别确认统计
+    confirmed = sum(1 for p in res.points if "30m确认" in (p.note or ""))
+    unconfirmed = sum(1 for p in res.points if "无次级别确认" in (p.note or ""))
+    if df_30m is not None:
+        st.caption(f"📎 多级别(30m)联立：本级别买卖点中 {confirmed} 个获 30m 确认 / {unconfirmed} 个未确认"
+                   "（买卖点 hover 可见各自确认情况）。")
+    else:
+        st.caption("📎 多级别(30m)：未取到 30 分钟K线，本次仅日线本级别判断。")
 
     st.caption("⚠️ 缠论为结构化技术判断，非投资建议；未来条件为基于当前结构的推演，需后续K线走出确认；"
                "1买/1卖的背驰条件为近似提示，不保证成立。")
