@@ -10,7 +10,7 @@ def test_theme_has_ashare_semantic_colors():
     assert THEME["up"] == "#e11d48"
     assert THEME["down"] == "#059669"
     assert THEME["bg"] == "#f8fafc"
-    assert THEME["accent"] == "#2563eb"
+    assert THEME["accent"] == "#1d4ed8"
 
 
 def test_build_theme_css_returns_style_block_with_tokens():

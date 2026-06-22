@@ -11,7 +11,7 @@ THEME = {
     "text_dim":  "#64748b",   # 次文字（slate-500）
     "up":        "#e11d48",   # 涨（A股红，rose-600）
     "down":      "#059669",   # 跌（A股绿，emerald-600）
-    "accent":    "#2563eb",   # 交互强调（SaaS 蓝，blue-600）
+    "accent":    "#1d4ed8",   # 交互强调（靛蓝 blue-700，深稳重）
     "gold":      "#d97706",   # 点睛（amber-600）
 }
 
