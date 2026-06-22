@@ -29,8 +29,8 @@ p, span, label, li {{ color: {t['text']}; }}
 
 /* 卡片 */
 .ftc-card {{
-    background: {t['card']}; border: 1px solid {t['border']}; border-radius: 12px;
-    padding: 16px 18px; margin: 8px 0;
+    background: {t['card']}; border: 1px solid {t['border']}; border-radius: 10px;
+    padding: 14px 16px; margin: 8px 0;
 }}
 .ftc-card .ftc-label {{ color: {t['text_dim']}; font-size: 0.8rem; }}
 .ftc-card .ftc-value {{ color: {t['text']}; font-size: 1.5rem; font-weight: 700; }}
@@ -49,24 +49,24 @@ p, span, label, li {{ color: {t['text']}; }}
 .ftc-down {{ color: {t['down']}; }}
 
 /* 遗留内联HTML类（app.py 顶部标题栏 + 智能体/决策/风险卡）深色重定义 */
+/* 顶部品牌条（精简单行） */
 .top-nav {{
-    background: linear-gradient(135deg, {t['panel']} 0%, {t['card']} 100%);
-    padding: 1.4rem 2rem; border-radius: 14px; margin-bottom: 1.5rem;
-    border: 1px solid {t['border']}; border-left: 4px solid {t['accent']};
+    background: {t['panel']}; padding: 0.5rem 0.9rem; border-radius: 8px; margin-bottom: 0.6rem;
+    border: 1px solid {t['border']}; border-left: 3px solid {t['accent']};
 }}
-.nav-title {{ font-size: 2rem; font-weight: 800; color: {t['text']}; text-align: center; margin: 0; letter-spacing: 1px; }}
-.nav-subtitle {{ text-align: center; color: {t['text_dim']}; font-size: 0.95rem; margin-top: 0.5rem; font-weight: 300; }}
+.nav-title {{ font-size: 1.15rem; font-weight: 800; color: {t['text']}; letter-spacing: .5px; }}
+.nav-subtitle {{ color: {t['text_dim']}; font-size: 0.85rem; font-weight: 400; }}
 .agent-card {{
-    background: {t['card']}; padding: 1.3rem; border-radius: 12px; margin: 1rem 0;
-    border: 1px solid {t['border']}; border-left: 4px solid {t['accent']};
+    background: {t['card']}; padding: 1.1rem; border-radius: 8px; margin: 0.8rem 0;
+    border: 1px solid {t['border']}; border-left: 3px solid {t['accent']};
 }}
 .decision-card {{
-    background: {t['card']}; padding: 1.6rem; border-radius: 12px; margin: 1.2rem 0;
-    border: 1px solid {t['border']}; border-left: 4px solid {t['accent']};
+    background: {t['card']}; padding: 1.3rem; border-radius: 8px; margin: 1rem 0;
+    border: 1px solid {t['border']}; border-left: 3px solid {t['accent']};
 }}
 .warning-card {{
-    background: {t['card']}; padding: 1.3rem; border-radius: 12px; margin: 1rem 0;
-    border: 1px solid {t['border']}; border-left: 4px solid {t['gold']};
+    background: {t['card']}; padding: 1.1rem; border-radius: 8px; margin: 0.8rem 0;
+    border: 1px solid {t['border']}; border-left: 3px solid {t['gold']};
 }}
 
 /* 按钮 */

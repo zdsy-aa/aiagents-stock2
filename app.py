@@ -28,13 +28,11 @@ inject_theme()
 
 
 def main():
-    # 顶部标题栏
-    st.markdown("""
-    <div class="top-nav">
-        <h1 class="nav-title">📈 复合多AI智能体股票团队分析系统</h1>
-        <p class="nav-subtitle">基于DeepSeek的专业量化投资分析平台 | Multi-Agent Stock Analysis System</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # 顶部品牌条（精简：原大横幅瘦身为单行，导航/页标题已由 render_top_nav 承担）
+    st.markdown(
+        '<div class="top-nav"><span class="nav-title">📈 复合多AI智能体股票分析</span>'
+        '<span class="nav-subtitle"> · DeepSeek 量化平台</span></div>',
+        unsafe_allow_html=True)
 
     # P2 整改八: 统一在入口处加载环境变量
     from dotenv import load_dotenv
