@@ -44,3 +44,4 @@ data/chanlun_history/
 .aider*
 !.aider.conf.yml
 data/commonality_reports/
+.superpowers/
