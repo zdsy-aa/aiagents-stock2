@@ -59,6 +59,13 @@ def _news_normalize(df, source, n=150):
         title = pick(_NEWS_TITLE_KEYS)
         content = pick(_NEWS_CONTENT_KEYS)
         t = pick(_NEWS_TIME_KEYS)
+        # 无标题源(如新浪快讯只有 时间/内容)用内容兜底标题:优先【】内,否则取首句,截40字
+        if not title and content:
+            c = content.lstrip()
+            if c.startswith("【") and "】" in c:
+                title = c[1:c.index("】")][:40]
+            else:
+                title = c.split("。")[0][:40]
         if title or content:
             out.append({"title": title, "content": content[:200], "publish_time": t, "source": source})
     return out

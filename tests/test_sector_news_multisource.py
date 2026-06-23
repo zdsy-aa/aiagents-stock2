@@ -40,3 +40,18 @@ def test_news_chain_picks_first_nonempty():
 
 def test_news_chain_all_fail_returns_empty():
     assert _news_chain([("a", lambda: None), ("b", lambda: pd.DataFrame())], timeout=5) == []
+
+
+def test_normalize_sina_title_fallback_bracket():
+    # 新浪快讯无标题列,内容以【标题】开头 → 取【】内作标题
+    df = pd.DataFrame([{"时间": "2026-06-23 09:54", "内容": "【浦发银行获增持】公告称大股东增持。"}])
+    out = _news_normalize(df, "新浪")
+    assert out[0]["title"] == "浦发银行获增持"
+    assert out[0]["publish_time"] == "2026-06-23 09:54"
+
+
+def test_normalize_sina_title_fallback_sentence():
+    # 无【】则取内容首句(去句号,截40)
+    df = pd.DataFrame([{"时间": "t", "内容": "央行今日开展逆回购操作。后续跟进。"}])
+    out = _news_normalize(df, "新浪")
+    assert out[0]["title"] == "央行今日开展逆回购操作"
