@@ -39,6 +39,41 @@ def _call_with_timeout(func, timeout_sec):
     return box.get("v")
 
 
+_NEWS_TITLE_KEYS = ["标题", "title", "新闻标题"]
+_NEWS_CONTENT_KEYS = ["内容", "摘要", "content", "正文", "summary"]
+_NEWS_TIME_KEYS = ["发布时间", "时间", "datetime", "发布日期", "ctime", "date"]
+
+
+def _news_normalize(df, source, n=150):
+    """任一新闻源 df → 统一 [{title, content, publish_time, source}]。按候选列名映射,缺列容错。"""
+    if df is None or getattr(df, "empty", True):
+        return []
+    out = []
+    for row in df.head(n).to_dict("records"):
+        def pick(keys):
+            for k in keys:
+                v = row.get(k)
+                if v is not None and str(v).strip():
+                    return str(v).strip()
+            return ""
+        title = pick(_NEWS_TITLE_KEYS)
+        content = pick(_NEWS_CONTENT_KEYS)
+        t = pick(_NEWS_TIME_KEYS)
+        if title or content:
+            out.append({"title": title, "content": content[:200], "publish_time": t, "source": source})
+    return out
+
+
+def _news_chain(sources, timeout=25):
+    """sources=[(label, callable)]; 逐源 _call_with_timeout 取 df→归一化,首个非空即返回;全失败 []。"""
+    for label, fn in sources:
+        df = _call_with_timeout(fn, timeout)
+        rows = _news_normalize(df, label)
+        if rows:
+            return rows
+    return []
+
+
 def _try_sources(sources):
     """按序尝试 (label, callable, timeout_sec)，第一个返回非空(非 None、非空 DataFrame/dict/list)即用。
 
@@ -545,51 +580,21 @@ class SectorStrategyDataFetcher:
         return {}
     
     def _get_financial_news(self):
-        """获取财经新闻
+        """多源真实新闻链：财联社→新浪→同花顺→富途→东财，逐源硬超时取首个非空。
 
-        说明：原用 ak.stock_news_em(symbol="全球") 在 akshare 1.18+ 上会触发内部
-        "Invalid regular expression: \\u" 错误（且 stock_news_em 实为个股新闻接口，
-        传 "全球" 用法不当）。改用 stock_info_global_cls（财联社全球电报）作为主源，
-        东财全球快讯 stock_info_global_em 作为备源，均带接口存在性防御。
+        各源列名不同，统一经 _news_normalize 归一化为 {title,content,publish_time,source}；
+        全源失败返回 []（format_data_for_ai 会提示 AI 勿臆测消息面）。零新依赖，全 akshare 真实源。
         """
-        # 主源：财联社全球电报（列：标题/内容/发布日期/发布时间）
-        if hasattr(ak, 'stock_info_global_cls'):
-            try:
-                df = _call_with_timeout(ak.stock_info_global_cls, NEWS_FETCH_TIMEOUT)
-                if df is not None and not df.empty:
-                    news_list = []
-                    for _, row in df.head(150).iterrows():
-                        pub = f"{row.get('发布日期', '')} {row.get('发布时间', '')}".strip()
-                        news_list.append({
-                            "title": row.get('标题', ''),
-                            "content": row.get('内容', ''),
-                            "publish_time": pub,
-                            "source": "财联社",
-                            "url": ''
-                        })
-                    return news_list
-            except Exception as e:
-                logger.error(f"    财联社财经新闻获取失败，尝试备源: {e}")
-
-        # 备源：东财全球财经快讯（列：标题/摘要/发布时间/链接）
-        if hasattr(ak, 'stock_info_global_em'):
-            try:
-                df = _call_with_timeout(ak.stock_info_global_em, NEWS_FETCH_TIMEOUT)
-                if df is not None and not df.empty:
-                    news_list = []
-                    for _, row in df.head(150).iterrows():
-                        news_list.append({
-                            "title": row.get('标题', ''),
-                            "content": row.get('摘要', '') or row.get('内容', ''),
-                            "publish_time": str(row.get('发布时间', '')),
-                            "source": "东方财富",
-                            "url": row.get('链接', '')
-                        })
-                    return news_list
-            except Exception as e:
-                logger.error(f"    获取财经新闻失败: {e}")
-
-        return []
+        order = [("财联社", "stock_info_global_cls"), ("新浪", "stock_info_global_sina"),
+                 ("同花顺", "stock_info_global_ths"), ("富途", "stock_info_global_futu"),
+                 ("东财", "stock_info_global_em")]
+        sources = [(label, getattr(ak, name)) for label, name in order if hasattr(ak, name)]
+        rows = _news_chain(sources, timeout=NEWS_FETCH_TIMEOUT)
+        if rows:
+            logger.info("    ✓ 财经新闻 %d 条（源: %s）", len(rows), rows[0]["source"])
+        else:
+            logger.info("    财经新闻全源未取到，留空")
+        return rows
     
     def format_data_for_ai(self, data):
         """
