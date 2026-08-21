@@ -3,7 +3,7 @@ import csv, io, os, sys
 import sqlite3
 from db import get_pg_conn, ro_sqlite
 from convert import (
-    to_ts, to_price, to_bool, to_tstamp_str, sqlite_to_pg_type, TABLE_COMMENTS, COLUMN_COMMENTS,
+    to_ts, to_price, to_amount, to_bool, to_tstamp_str, sqlite_to_pg_type, TABLE_COMMENTS, COLUMN_COMMENTS,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # aiagents-stock/
@@ -126,7 +126,7 @@ def import_market_kline(conn):
         for src_tbl, pg_tbl in tables:
             rows = c.execute(f"SELECT Date,Open,High,Low,Close,Volume,Amount,InDate FROM {src_tbl}")
             out = ((code, to_ts(r[0]), to_price(r[1]), to_price(r[2]), to_price(r[3]),
-                    to_price(r[4]), r[5], r[6], to_ts(r[7])) for r in rows)
+                    to_price(r[4]), r[5], to_amount(r[6]), to_ts(r[7])) for r in rows)
             copy_csv(conn, pg_tbl, out)
         c.close()
         if (i + 1) % 500 == 0:

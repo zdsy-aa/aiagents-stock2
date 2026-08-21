@@ -14,6 +14,12 @@ def to_price(v):
         return None
     return float(v) / 1000.0
 
+def to_amount(v):
+    """成交额：源为 ×1000 整数，÷1000 转元（与 to_price 同尺度）。"""
+    if v is None or v == "":
+        return None
+    return float(v) / 1000.0
+
 def to_bool(v):
     if v is None or v == "":
         return None
