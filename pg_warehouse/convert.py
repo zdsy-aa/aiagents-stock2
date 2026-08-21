@@ -19,6 +19,19 @@ def to_bool(v):
         return None
     return bool(int(v))
 
+def to_tstamp_str(s):
+    """SQLite 声明为 TIMESTAMP 的字段实为 TEXT 字符串（本地 Asia/Shanghai 时间），
+    转 aware datetime；兼容有无微秒。无法解析返回 None。"""
+    if s is None or s == "":
+        return None
+    s = str(s).strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(s, fmt).replace(tzinfo=TZ)
+        except ValueError:
+            continue
+    return None
+
 def sqlite_to_pg_type(col_type):
     t = (col_type or "").upper()
     if t.startswith("INT") or t == "INTEGER":
