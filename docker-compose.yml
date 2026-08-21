@@ -163,6 +163,31 @@ services:
     networks:
       - agentsstock-network
 
+  # PostgreSQL 静态数据仓库：行情 K 线（日线/5分钟/30分钟）+ 各信号库的统一归档与查询库。
+  # 由 pg-sync-updater 每天 21:00 增量同步；宿主机 5432 端口可 psql 直连。
+  postgres:
+    image: postgres:16
+    container_name: pg-warehouse
+    logging: *default-logging
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_PASSWORD=${PG_PASSWORD}
+      - POSTGRES_DB=${PG_DB}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - agentsstock-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   agentsstock-network:
     driver: bridge

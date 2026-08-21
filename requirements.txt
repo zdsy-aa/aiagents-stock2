@@ -20,3 +20,4 @@ lxml==6.1.1
 aktools==0.0.91
 baostock==0.9.1
 lightgbm
+psycopg2-binary==2.9.10
