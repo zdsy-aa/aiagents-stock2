@@ -95,6 +95,7 @@ def copy_csv(conn, table, rows):
 
 def import_codes_calendar(conn):
     c = ro_sqlite(CODES_DB)
+    # 注意：源列名 Decimal 对应 PG 表 market.stock_codes 的 decimal_places 列（COPY 按位置绑定，无列清单）
     rows = c.execute("SELECT ID,Name,Code,Exchange,Multiple,Decimal,LastPrice,EditDate,InDate FROM codes")
     out = ((r[0], r[1], r[2], r[3], r[4], r[5], r[6], to_ts(r[7]), to_ts(r[8])) for r in rows)
     copy_csv(conn, "market.stock_codes", out)

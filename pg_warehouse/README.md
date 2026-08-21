@@ -126,3 +126,30 @@ psql -h localhost -p 5432 -U stock -d stock_warehouse
 - `db.py` / `convert.py` —— 连接管理与类型转换逻辑。
 - `import_all.py` —— 全量导入入口。
 - `sync_daily.py` —— 增量同步入口。
+
+## 11. 已知问题与注意事项
+
+### 11.1 K线数据冗余（7 对重复文件）
+
+源 `tdx-data/database/kline/` 目录里，有 7 只股票同时存在「裸数字文件名」和「sh/sz 前缀文件名」两个**内容完全重复**的 .db 文件（000001 / 000002 / 000063 / 002594 / 300750 / 600000 / 600519 的 `000001.db` 与 `sz000001.db` 等）。这是 tdx-api 拉取时的历史归一化遗留。导入时按文件名当 code，导致这 7 只票以两个 code（如 `000001` 和 `sz000001`）重复进库。可去重，附 SQL：
+
+```sql
+-- 删除 7 对重复中带 sh/sz 前缀的那份（保留裸数字 code），三张 kline 表各执行一次：
+DELETE FROM market.kline_day   WHERE code LIKE 'sz%' OR code LIKE 'sh%';
+DELETE FROM market.kline_5min  WHERE code LIKE 'sz%' OR code LIKE 'sh%';
+DELETE FROM market.kline_30min WHERE code LIKE 'sz%' OR code LIKE 'sh%';
+```
+
+> 注：去重前请自行确认无其它带前缀的独有数据；本仓库现状仅这 7 对为重复。
+
+### 11.2 价格缩放口径差异
+
+`stock_codes.multiple` 是「价格倍数 100」（指数等），而 `kline_*` 的价格是「×1000 整数已转元」。两个表的缩放口径不同（100 vs 1000），**不可混用**。
+
+### 11.3 生产安全
+
+`.env.example` 里 `PG_PASSWORD=change_me` 是占位；生产部署务必改成强密码（端口 5432 绑定宿主机全接口）。
+
+### 11.4 首跑提示
+
+首次部署后，`pg-sync-updater` 每天 21:00 才触发增量；如需立即有数据，先手动跑一次全量导入 `python3 import_all.py`。
