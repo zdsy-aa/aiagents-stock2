@@ -11,7 +11,7 @@
 |---|---|---|
 | 1. 分析师怎么分析? | 每个「分析师」是 `StockAnalysisAgents` 的一个方法:拼 prompt(3 个来自 `deepseek_client.py` 模板 + 2 个内联)→ 调 DeepSeek API → 返回 `{角色, 报告, 关注领域, 时间}`;5 个分析师 6 线程并行 | `ai_agents.py:17-151`、`deepseek_client.py:26-49` |
 | 2. 根据什么数据? | 7 类输入:行情(基本信息+K线)、规则指标、财务、季报、资金流向、市场情绪、风险;新闻已取数但**未接入任何智能体**;行业**未接入** | `stock_data.py:24/39/545/611/854`、`views/analysis_runner.py:272-411` |
-| 3. 分析流程? | 按勾选门控取数 → 并行多智能体 → 首席分析师综合讨论 → 投资决策专家输出 JSON 决策 → 落库 | `views/analysis_runner.py:260-484`、`stock_analysis_engine.py:18-137` |
+| 3. 分析流程? | 按勾选门控取数 → 并行多智能体 → 首席分析师综合讨论 → 投资决策专家输出 JSON 决策 → 落库 | `views/analysis_runner.py:260-494`、`stock_analysis_engine.py:18-137` |
 | 4. 哪些规则/哪些 AI? | 规则=指标计算、ARBR 解读、市场路由/数据源切换、风险数据格式化、JSON 提取;AI=DeepSeek 调用与 prompt 模板、5 个分析师+首席+决策专家角色 | `stock_data.py:545-609`、`deepseek_client.py:51-160`、`ai_agents.py:65-107` |
 
 ## 一、入口与调用链
@@ -98,7 +98,7 @@
 | 规则 | 出处 |
 |---|---|
 | 技术指标计算:MA5/10/20/60、RSI14、MACD、BOLL、KDJ(K/D)、量比(ta 库公式,写死参数) | `stock_data.py:545-583` |
-| 最新指标值提取(取最新一行 12 项) | `stock_data.py:585-609` |
+| 最新指标值提取(取最新一行 13 项) | `stock_data.py:585-609` |
 | ARBR 指标计算与解读、买卖信号生成 | `market_sentiment_data.py:126`(计算)、`:254`(解读)、`:295`(信号) |
 | 市场路由:A股/港股/美股代码判定与分发 | `stock_data.py:51` 等 |
 | 数据源自动切换:akshare/tushare/data_source_manager | `stock_data.py:22`、`:91`、`:441` |
