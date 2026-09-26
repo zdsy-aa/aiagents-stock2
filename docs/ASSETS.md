@@ -9,7 +9,7 @@
 
 | 资产域 | 位置 | 数量(2026-09-26 实测) |
 |---|---|---|
-| 代码 | aiagents-stock(122 顶层 .py + views/ 10 + tests/ 50)、通达信py脚本(5 .py)、行业数据集脚本(7 .py,原 tdxgp 已迁移) | 约 194 个 .py + tdx-api Go 服务 |
+| 代码 | aiagents-stock(122 顶层 .py + views/ 10 + tests/ 50 + data/profit_mining 91)、通达信py脚本(5 .py)、行业数据集脚本(7 .py,原 tdxgp 已迁移) | 约 285 个 .py(口径:122 顶层 + views 10 + tests 50 + profit_mining 91 + 通达信 5 + 行业数据集 7)+ tdx-api Go 服务 |
 | 指标 | 通达信指标/20260424001/tdx_v4_standalone(7 个公式子目录 + 99_说明手册) | 32 个公式 .txt + 4 个手册 .txt |
 | 数据 | aiagents-stock/tdx-data/database/kline(5604 个 .db)、data/*.db(15 个信号/业务库)、data/profit_mining(223 个研究文件)、通达信股票上下游分析/a_shares_raw.json | — |
 | 文档 | aiagents-stock/docs(73 .md + plans/specs)、各目录 .md(共 115 个)与 .xlsx 交付物(3 个) | — |
@@ -19,7 +19,7 @@
 ### 1.1 aiagents-stock(Streamlit 主应用)
 
 - 路径:`/home/tdxback/aiagents-stock/*.py`、`views/*.py`
-- 用途:AI 股票分析主应用(分析/选股/策略/监测/配置,共 21 页面路由)
+- 用途:AI 股票分析主应用(分析/选股/策略/监测/配置,共 20 页面路由)
 - 维护方式:手工编码(个人项目,单开发者)
 - 更新频率:需求驱动
 
