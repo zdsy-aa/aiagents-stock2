@@ -151,3 +151,45 @@ def test_scan_signals_missing_col_wraps_runtime_error():
     spec = {"name": "X", "conds": [{"col": "不存在的列", "op": ">", "value": 0}], "join": "AND"}
     with pytest.raises(RuntimeError, match="scan_signals"):
         scr.scan_signals(spec, SYN_DF.copy())
+
+
+# ---- Phase5 Task5.2: risk_filter 参数 ----
+
+def test_screen_stocks_risk_filter_applied_after_normalize(monkeypatch):
+    # 归一化后的 df(名称槽已映射)再应用风险过滤:ST 行被剔除,列仍为五槽
+    from automation.risk_filter import build_risk_filter
+    monkeypatch.setitem(
+        scr.SELECTORS, "fake7",
+        lambda params, universe: pd.DataFrame(
+            {"股票代码": ["1", "2"], "股票简称": ["A", "ST股"]}))
+    out = scr.screen_stocks(
+        "fake7", risk_filter=build_risk_filter({"exclude_st": True}))
+    assert list(out.columns) == SCREEN_RESULT_COLS
+    assert out["代码"].tolist() == ["1"]
+
+
+def test_screen_stocks_risk_filter_default_none(monkeypatch):
+    # 缺省 risk_filter=None:不过滤,保持旧行为(ST 行原样返回)
+    monkeypatch.setitem(
+        scr.SELECTORS, "fake8",
+        lambda params, universe: pd.DataFrame(
+            {"code": ["1", "2"], "name": ["A", "ST股"]}))
+    out = scr.screen_stocks("fake8")
+    assert out["代码"].tolist() == ["1", "2"]
+
+
+def test_screen_stocks_risk_filter_not_callable_raises(monkeypatch):
+    monkeypatch.setitem(
+        scr.SELECTORS, "fake9",
+        lambda params, universe: pd.DataFrame({"code": ["1"]}))
+    with pytest.raises(TypeError, match="risk_filter"):
+        scr.screen_stocks("fake9", risk_filter=123)
+
+
+def test_screen_stocks_risk_filter_bad_return_wraps_runtime_error(monkeypatch):
+    # risk_filter 返回非 DataFrame:按 R4-A 包装为 RuntimeError(消息含接口名)
+    monkeypatch.setitem(
+        scr.SELECTORS, "fake10",
+        lambda params, universe: pd.DataFrame({"code": ["1"]}))
+    with pytest.raises(RuntimeError, match="screen_stocks"):
+        scr.screen_stocks("fake10", risk_filter=lambda df: ["1"])

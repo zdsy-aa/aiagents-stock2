@@ -9,7 +9,9 @@
   填空串,不编造。选股器返回 ``(ok, df, msg)``,``ok=False`` 按 R4-A 抛
   RuntimeError(消息含 selector 的 msg);结果为空默认抛 RuntimeError,
   ``raise_on_empty=False`` 时返回空表(批量循环用,P5-4);未知 selector 抛
-  ValueError。
+  ValueError;可选 ``risk_filter``(callable(df)->df,如
+  automation.risk_filter 产物)对归一化结果做风险前置过滤(P5-5.2,
+  默认 None 不过滤)。
 - :func:`scan_signals` 在面板 DataFrame 上按 ComboSpec 求值(复用 Phase3
   ``backtest.combo_engine.eval_combo``),返回 mask 命中行的 代码/日期/信号名列
   (保留面板原列名,不做 SCREEN_RESULT_COLS 归一化)。spec 可为 ComboSpec dict
@@ -170,7 +172,8 @@ def _normalize_result(df):
     return pd.DataFrame(out, index=df.index, columns=SCREEN_RESULT_COLS)
 
 
-def screen_stocks(selector, params=None, universe=None, raise_on_empty=True):
+def screen_stocks(selector, params=None, universe=None, raise_on_empty=True,
+                  risk_filter=None):
     """调用注册选股器并把结果归一化为 SCREEN_RESULT_COLS。
 
     Args:
@@ -179,12 +182,17 @@ def screen_stocks(selector, params=None, universe=None, raise_on_empty=True):
         universe: 预留的自选池参数,现有选股器不支持时忽略。
         raise_on_empty: 结果为空时是否抛 RuntimeError(默认 True,保持旧行为);
             False 时返回空表(列恒为 SCREEN_RESULT_COLS),供批量循环使用(P5-4)。
+        risk_filter: 可选风险前置过滤 callable(df) -> df(如
+            automation.risk_filter.build_risk_filter 产物,Phase5 Task5.2);
+            默认 None 不过滤(旧行为)。传入时对归一化后的 df 应用,返回值须为
+            DataFrame,过滤后列仍为 SCREEN_RESULT_COLS。
 
     Returns:
         DataFrame,列恒为 SCREEN_RESULT_COLS(代码/名称/信号/得分/备注)。
 
     Raises:
         ValueError: 未知 selector。
+        TypeError: risk_filter 非 callable。
         RuntimeError: 选股器失败(ok=False,消息含原因)、结果为空
             (raise_on_empty=True 时)或结果无法归一化(如非 DataFrame),均按
             R4-A 经 api_error 包装,消息含 selector 名,__cause__ 保留原始异常。
@@ -192,6 +200,9 @@ def screen_stocks(selector, params=None, universe=None, raise_on_empty=True):
     if selector not in SELECTORS:
         raise ValueError(
             f"未知选股器: {selector!r}(可用: {'、'.join(SELECTORS)})")
+    if risk_filter is not None and not callable(risk_filter):
+        raise TypeError(
+            f"risk_filter 须为 callable(df) -> df,got {type(risk_filter).__name__}")
     fn = SELECTORS[selector]
     api = f"screen_stocks({selector})"
     try:
@@ -209,7 +220,13 @@ def screen_stocks(selector, params=None, universe=None, raise_on_empty=True):
         if df is None or len(df) == 0:
             if raise_on_empty:
                 raise RuntimeError(msg or "选股结果为空")
-        return _normalize_result(df)
+        out = _normalize_result(df)
+        if risk_filter is not None:
+            out = risk_filter(out)
+            if not isinstance(out, pd.DataFrame):
+                raise RuntimeError(
+                    f"risk_filter 返回非 DataFrame: {type(out).__name__}")
+        return out
     except Exception as e:
         raise api_error(api, e)
 
