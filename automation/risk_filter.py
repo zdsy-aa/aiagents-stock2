@@ -18,6 +18,11 @@ market_env_gate -> exclude_st -> min_amount -> exclude_events(事件取数
 该规则原样透传,并记录到返回函数 ``.records`` 列表与 logger.warning
 ——前置过滤定位是「宁可漏滤,不阻断选股链路」。
 
+输出列结构恒稳定:pandas 3.x 下 0 行 DataFrame 的布尔行掩码可能退化为
+列选择导致整表列丢失(3.0.6 实测),入口空表早返回 + 每条规则掩码经
+``_row_mask``(空表原样返回)双重防护,保证任一规则剔空全部行后输出仍
+保留原列结构(screen_stocks 依赖「列恒为五槽」契约)。
+
 风险数据模块摸底结论(本文件依据):
 - 模块: 根目录 risk_data_fetcher.py,类 RiskDataFetcher;
 - 入口: get_risk_data(symbol: str) -> Dict,键 symbol/data_success/
@@ -70,6 +75,17 @@ def _is_st(value) -> bool:
         return False
 
 
+def _row_mask(df: pd.DataFrame, mask) -> pd.DataFrame:
+    """按行掩码过滤 df,空表原样返回(列结构保留)。
+
+    pandas 3.x 对 0 行 DataFrame 做布尔行掩码可能退化为列选择:掩码为非
+    bool dtype(如 map/~ 产生的 object 空序列)时整表列丢失(3.0.6 实测)。
+    规则管道中途被前序规则剔空后,后续规则的掩码必须经此函数,保证输出
+    列恒稳定(screen_stocks 依赖「列恒为五槽」契约)。
+    """
+    return df if len(df) == 0 else df[mask]
+
+
 def build_risk_filter(rules: Dict[str, Any]) -> Callable[[pd.DataFrame], pd.DataFrame]:
     """按 rules 构建风险过滤函数,返回 callable(df) -> df。
 
@@ -101,8 +117,9 @@ def build_risk_filter(rules: Dict[str, Any]) -> Callable[[pd.DataFrame], pd.Data
             _record("exclude_events", f"风险数据模块不可用: {e}")
 
     def risk_filter(df: pd.DataFrame) -> pd.DataFrame:
-        # 空表直接返回:pandas 3.x 对 0 行 DataFrame 做布尔行掩码会退化为
-        # 列选择(df[mask] 失配行轴后按列解释),导致列丢失;空表无可过滤,提前返回。
+        # 入口空表直接返回;管道中途被前序规则剔空的情况由各掩码处的
+        # _row_mask 防护(pandas 3.x 对 0 行 DataFrame 的布尔行掩码可能退化
+        # 为列选择导致列全丢,详见 _row_mask 注释)。
         if df is None or len(df) == 0:
             return df
         out = df
@@ -123,7 +140,7 @@ def build_risk_filter(rules: Dict[str, Any]) -> Callable[[pd.DataFrame], pd.Data
                 mask = pd.Series(False, index=out.index)
                 for c in name_cols:
                     mask = mask | out[c].map(_is_st)
-                out = out[~mask]
+                out = _row_mask(out, ~mask)
         # 2. 流动性
         min_amount = rules.get("min_amount")
         if min_amount is not None:
@@ -132,7 +149,7 @@ def build_risk_filter(rules: Dict[str, Any]) -> Callable[[pd.DataFrame], pd.Data
                 _record("min_amount", "无成交额列")
             else:
                 try:
-                    out = out[out[amount_col] >= min_amount]
+                    out = _row_mask(out, out[amount_col] >= min_amount)
                 except Exception as e:
                     _record("min_amount", f"成交额列不可比: {e}")
         # 3. 重大事件(逐代码取数,失败保留该行)
@@ -159,7 +176,7 @@ def build_risk_filter(rules: Dict[str, Any]) -> Callable[[pd.DataFrame], pd.Data
                             _record("exclude_events", f"{code} 取数失败: {e}")
                             continue
                     if drop_codes:
-                        out = out[~out[code_col].isin(drop_codes)]
+                        out = _row_mask(out, ~out[code_col].isin(drop_codes))
         return out
 
     risk_filter.records = records

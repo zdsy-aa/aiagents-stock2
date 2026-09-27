@@ -184,3 +184,63 @@ def test_filter_on_empty_df_returns_empty():
     out = f(df)
     assert len(out) == 0
     assert list(out.columns) == list(df.columns)
+
+
+# ---- 回归(审查修复):管道中途剔空后列结构保持 ----
+# pandas 3.x 对 0 行 DataFrame 的布尔行掩码可能退化为列选择导致列全丢
+# (map/~ 产生 object 掩码时必现,3.0.6 实测);_row_mask 空表原样返回,
+# 保证 screen_stocks「列恒为五槽」契约不被破坏。
+
+def test_mid_pipeline_empty_after_st_keeps_columns():
+    # exclude_st 剔光全部行后,min_amount/exclude_events 仍执行:列保留
+    df = pd.DataFrame({
+        "代码": ["1", "2"],
+        "名称": ["ST甲", "*ST乙"],
+        "成交额": pd.Series([1e8, 5e7], dtype=object),
+    })
+    f = build_risk_filter({"exclude_st": True, "min_amount": 1e7,
+                           "exclude_events": True})
+    out = f(df)
+    assert len(out) == 0
+    assert list(out.columns) == ["代码", "名称", "成交额"]
+
+
+def test_mid_pipeline_empty_after_liquidity_keeps_columns():
+    # min_amount 剔光全部行后,exclude_events 仍执行:列保留
+    df = pd.DataFrame({
+        "代码": ["1", "2"],
+        "名称": ["A", "B"],
+        "成交额": [3e6, 4e6],
+    })
+    f = build_risk_filter({"exclude_st": True, "min_amount": 1e7,
+                           "exclude_events": True})
+    out = f(df)
+    assert len(out) == 0
+    assert list(out.columns) == ["代码", "名称", "成交额"]
+
+
+def test_mid_pipeline_empty_keeps_screen_five_cols():
+    # screen 归一化五槽 df(全字符串列):ST 剔光后事件规则仍执行,五槽列仍在
+    df = pd.DataFrame({
+        "代码": ["1", "2"],
+        "名称": ["*ST甲", "ST乙"],
+        "信号": ["一买", "二买"],
+        "得分": ["80", "90"],
+        "备注": ["", ""],
+    })
+    f = build_risk_filter({"exclude_st": True, "exclude_events": True})
+    out = f(df)
+    assert len(out) == 0
+    assert list(out.columns) == ["代码", "名称", "信号", "得分", "备注"]
+
+
+def test_row_mask_on_empty_keeps_columns():
+    # 机制锁定:0 行 DataFrame + map/~ 产生的 object 空掩码(无 _row_mask 时
+    # df[mask] 退化列选择,列全丢),经 _row_mask 后列结构保持
+    from automation.risk_filter import _row_mask
+
+    df = pd.DataFrame({"代码": [], "名称": [], "成交额": []})
+    mask = ~df["名称"].map(lambda v: False)
+    out = _row_mask(df, mask)
+    assert len(out) == 0
+    assert list(out.columns) == ["代码", "名称", "成交额"]
