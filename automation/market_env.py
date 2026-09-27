@@ -155,7 +155,8 @@ def _fetch_zt_pool(date=None):
     """涨停股池 → (涨停数, 最高连板高度)。akshare stock_zt_pool_em。
 
     - 返回空表 → (0, 0)(可能非交易日或当日无涨停,由调用方记 notes);
-    - 缺「连板数」列 → 高度 None;
+    - 缺「连板数」列或该列全 NaN/非数值 → 高度 None(涨停数照常,不因此
+      清空整个池结果);
     - 接口失败抛异常(由 market_snapshot 记 notes)。
     """
     if ak is None:
@@ -166,7 +167,10 @@ def _fetch_zt_pool(date=None):
         return (0, 0)
     count = int(len(raw))
     height_col = next((c for c in raw.columns if "连板" in str(c)), None)
-    height = int(pd.to_numeric(raw[height_col], errors="coerce").max()) if height_col else None
+    height = None
+    if height_col:
+        m = pd.to_numeric(raw[height_col], errors="coerce").max()
+        height = int(m) if pd.notna(m) else None
     return (count, height)
 
 

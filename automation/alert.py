@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
-"""automation.alert 失败告警(Phase5 Task5.1):收集 run_jobs 的 failed → 日志 + 邮件。
+"""automation.alert 失败告警(Phase5 Task5.1):收集 run_jobs 的 failed → 统一提醒。
 
 - :func:`alert_failures` (res, mail=True):从 run_jobs 返回的结果字典收集
-  failed 任务列表 → 输出告警摘要(print + logger);``mail=True`` 时经
-  :func:`send_mail` 发邮件,``mail=False`` 仅日志,不触碰邮件通道。
+  failed 任务列表 → 经 automation.notify.notify 统一通道投递(终审修复波
+  接线,5.4):``mail=False`` 时 channels=["log"](仅日志,输出 stdout);
+  ``mail=True`` 时 channels=["log","mail"]。
 - :func:`send_mail` (subject, body):发纯文本邮件。复用 ops/send_mail.py 的
   load_env(.env 163 SMTP 配置)与同款 SMTP_SSL 发送逻辑,**不修改
   ops/send_mail.py 本体**;发送失败仅记日志并返回 False,不抛异常(告警通道
-  自身失败不得打断自动化主流程)。
+  自身失败不得打断自动化主流程);notify 的 mail 通道内部即复用本函数。
 
-注入约定:automation.jobs 在调用时把发送器解析为 ``jobs.send_mail``
-(见 jobs.alert_failures 包装),测试 monkeypatch ``jobs.send_mail`` 即生效。
+注入约定:alert_failures 延迟 import automation.notify.notify(notify 模块级
+引用本模块 send_mail,延迟 import 避免环依赖),测试 monkeypatch
+``automation.notify.notify`` 即生效。
 """
 import logging
 import time
@@ -66,30 +68,34 @@ def send_mail(subject, body):
         return False
 
 
-def alert_failures(res, mail=True, _sender=None):
-    """收集 run_jobs 结果中的 failed 任务 → 告警摘要 + (可选)邮件。
+def alert_failures(res, mail=True):
+    """收集 run_jobs 结果中的 failed 任务 → 统一 notify 通道(5.4 接线)。
 
     Args:
         res: run_jobs 返回的 {name: ok|failed|skipped} 结果字典。
-        mail: True 时经 send_mail 发信;False 仅日志(不触碰邮件通道)。
-        _sender: 邮件发送器(默认本模块 send_mail)。automation.jobs 的包装
-            传入 ``jobs.send_mail``,使 monkeypatch ``jobs.send_mail`` 可注入。
+        mail: True 时 channels=["log","mail"];False 仅 ["log"]
+            (log 通道输出 stdout,不触碰邮件通道)。
 
     Returns:
         None(告警通道失败不抛异常,不打断主流程)。
     """
+    from automation.notify import notify  # 延迟 import:notify 模块级引用 alert.send_mail
+
     failed = sorted(name for name, status in (res or {}).items() if status == "failed")
     if not failed:
-        print("本轮自动化任务无失败,跳过告警")
+        notify("本轮自动化任务无失败,跳过告警", channels=["log"])
         return
     summary = "自动化任务失败告警:" + "、".join(failed)
-    print(summary)
     logger.warning(summary)
-    if not mail:
-        return
-    subject = f"[自动化风控复盘] {len(failed)} 个任务失败({time.strftime('%Y-%m-%d %H:%M')})"
-    body = f"{summary}\n失败任务列表:\n" + "\n".join(f"- {name}: failed" for name in failed)
+    channels = ["log", "mail"] if mail else ["log"]
+    msg = summary
+    if mail:
+        subject = (f"[自动化风控复盘] {len(failed)} 个任务失败"
+                   f"({time.strftime('%Y-%m-%d %H:%M')})")
+        body = f"{summary}\n失败任务列表:\n" + "\n".join(
+            f"- {name}: failed" for name in failed)
+        msg = f"{subject}\n{body}"
     try:
-        (_sender or send_mail)(subject, body)
-    except Exception as exc:
-        logger.warning("失败告警邮件发送异常: %s", exc)
+        notify(msg, level="ERROR", channels=channels)
+    except Exception as exc:  # notify 自身不抛,防御保留
+        logger.warning("失败告警提醒异常: %s", exc)

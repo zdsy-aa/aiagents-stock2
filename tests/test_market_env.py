@@ -127,3 +127,51 @@ def test_market_snapshot_height_none_when_column_missing(monkeypatch):
     s = me.market_snapshot()
     assert s["limit_up_count"] == 10 and s["limit_up_height"] is None
     assert s["sentiment"] is None           # 高度缺失,规则无法判定
+
+
+# ---- 连板高度列分支(终审修复波⑦:缺列 / 全 NaN 不抛错,涨停数照常) ----
+
+def test_fetch_zt_pool_height_none_when_column_missing(monkeypatch):
+    class FakeAk:
+        def stock_zt_pool_em(self, date=None):
+            return pd.DataFrame({"代码": ["600000", "600519"]})
+    monkeypatch.setattr(me, "ak", FakeAk())
+    count, height = me._fetch_zt_pool()
+    assert count == 2 and height is None
+
+
+def test_fetch_zt_pool_height_none_when_column_all_nan(monkeypatch):
+    class FakeAk:
+        def stock_zt_pool_em(self, date=None):
+            return pd.DataFrame({"代码": ["600000", "600519"],
+                                 "连板数": [np.nan, np.nan]})
+    monkeypatch.setattr(me, "ak", FakeAk())
+    count, height = me._fetch_zt_pool()       # 全 NaN 不再 int(max) 抛 ValueError
+    assert count == 2 and height is None
+
+
+def test_fetch_zt_pool_height_taken(monkeypatch):
+    class FakeAk:
+        def stock_zt_pool_em(self, date=None):
+            return pd.DataFrame({"代码": ["600000", "600519"], "连板数": [2, 3]})
+    monkeypatch.setattr(me, "ak", FakeAk())
+    count, height = me._fetch_zt_pool()
+    assert count == 2 and height == 3
+
+
+def test_market_snapshot_height_all_nan_keeps_count(monkeypatch):
+    # 连板列全 NaN → 高度 None,涨停数/跌停数照常,不空掉整个池结果
+    _patch_index(monkeypatch, np.linspace(100, 60, 120))
+
+    class FakeAk:
+        def stock_zt_pool_em(self, date=None):
+            return pd.DataFrame({"代码": ["600000", "600519"],
+                                 "连板数": [np.nan, np.nan]})
+        def stock_zt_pool_dtgc_em(self, date=None):
+            return pd.DataFrame({"代码": ["600001"]})
+    monkeypatch.setattr(me, "ak", FakeAk())
+    s = me.market_snapshot()
+    assert s["limit_up_count"] == 2           # 涨停数照常
+    assert s["limit_up_height"] is None
+    assert s["limit_down_count"] == 1
+    assert s["sentiment"] is None             # 高度缺失,规则无法判定

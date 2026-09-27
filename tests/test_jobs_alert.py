@@ -3,12 +3,17 @@
 
 全部用例注入假实现(monkeypatch 被封装模块的接口函数),不真实跑网络/发信/
 加载 15M 确认面板;收盘后任务链以注入方式整链实测,记录各环节调用。
+告警(alert_failures)经统一 notify 通道投递,测试 monkeypatch
+automation.notify.notify 断言通道与内容。
 """
+import logging
+
 import pandas as pd
 import pytest
 
 import automation
 import automation.jobs as jobs
+import automation.notify as nt
 import interfaces.screen as scr
 
 
@@ -53,11 +58,23 @@ def test_stable_selector_registered():
 
 def test_alert_failures_mail_on(monkeypatch):
     sent = []
-    monkeypatch.setattr(jobs, "send_mail", lambda subj, body: sent.append((subj, body)))
+    monkeypatch.setattr(nt, "notify",
+                        lambda msg, level="INFO", channels=None: sent.append((msg, level, channels)) or {})
     jobs.alert_failures({"任务A": "failed", "任务B": "ok", "任务C": "skipped"}, mail=True)
     assert len(sent) == 1
-    assert "任务A" in sent[0][0] + sent[0][1]
-    assert "任务B" not in sent[0][1]   # 只报 failed,不报 ok/skipped
+    msg, level, channels = sent[0]
+    assert channels == ["log", "mail"]    # mail=True → 双通道(终审修复波:统一 notify)
+    assert "任务A" in msg
+    assert "任务B" not in msg             # 只报 failed,不报 ok/skipped
+    assert "任务C" not in msg
+
+
+def test_alert_failures_mail_off_channels_log_only(monkeypatch):
+    sent = []
+    monkeypatch.setattr(nt, "notify",
+                        lambda msg, level="INFO", channels=None: sent.append((msg, level, channels)) or {})
+    jobs.alert_failures({"任务A": "failed"}, mail=False)
+    assert len(sent) == 1 and sent[0][2] == ["log"]   # mail=False → 仅 log 通道
 
 
 def test_alert_failures_no_failure_skips_mail(monkeypatch, capsys):
@@ -67,12 +84,11 @@ def test_alert_failures_no_failure_skips_mail(monkeypatch, capsys):
     assert "无失败" in capsys.readouterr().out
 
 
-def test_alert_failures_mail_error_does_not_raise(monkeypatch, capsys):
-    def boom(subj, body):
-        raise RuntimeError("smtp down")
-    monkeypatch.setattr(jobs, "send_mail", boom)
+def test_alert_failures_notify_error_does_not_raise(monkeypatch):
+    def boom(msg, level="INFO", channels=None):
+        raise RuntimeError("notify down")
+    monkeypatch.setattr(nt, "notify", boom)
     jobs.alert_failures({"任务A": "failed"}, mail=True)   # 告警通道失败不打断
-    assert "任务A" in capsys.readouterr().out
 
 
 # ---- 补充用例:开盘前任务链(注入式,不跑网络) ----
@@ -142,11 +158,13 @@ def _fake_analysis_result(code):
         "generated_at": "2026-09-27 15:30:00", "current_state": "买入",
         "trend": "上升", "chip": "集中", "capital": "流入", "industry": "制造",
         "news": "无", "signals": "放量", "scenarios": [], "evidence": "讨论",
+        "analysis_id": 123456,
         "degraded": False, "degraded_reason": "",
     }
 
 
 def test_post_market_chain_end_to_end_injected(monkeypatch):
+    import automation.risk_filter as rf
     import interfaces.analyze as az
     import interfaces.ai_trace as ait
     calls = []
@@ -160,19 +178,30 @@ def test_post_market_chain_end_to_end_injected(monkeypatch):
                              "备注": [""] * len(rows)})
 
     monkeypatch.setattr(scr, "screen_stocks", fake_screen)
+
+    def fake_default_filter():
+        def filt(df):
+            calls.append(("risk_filter", sorted(df["代码"].tolist())))
+            return df
+        return filt
+    monkeypatch.setattr(rf, "default_risk_filter", fake_default_filter)
+
     monkeypatch.setattr(az, "analyze_stock",
                         lambda code, period="1y", with_ai=True: calls.append(("analyze", code)) or _fake_analysis_result(code))
     def fake_trace(symbol, name, period, stock_info, agents_results, discussion_result,
                    final_decision, prompt_version="", model_version="", input_snapshot=""):
-        calls.append(("trace", symbol, prompt_version, model_version))
+        calls.append(("trace", symbol, prompt_version, model_version, input_snapshot))
         return 42
     monkeypatch.setattr(ait, "trace_save", fake_trace)
 
     res = automation.run_jobs(jobs.POST_MARKET_JOBS, phase="post_market")
     assert res == {"收盘后选股": "ok", "收盘后分析": "ok", "收盘后信号记录": "ok"}
 
-    # 环节调用记录:chanlun → combo(均 raise_on_empty=False)→ 去重后前 N 只分析 → trace 落版本
+    # 环节调用记录:chanlun → combo(均 raise_on_empty=False)→ 去重 → 风险过滤 →
+    # 前 N 只分析 → trace 落版本
     assert calls[:2] == [("screen", "chanlun", False), ("screen", "combo", False)]
+    assert [c for c in calls if c[0] == "risk_filter"] == [
+        ("risk_filter", ["600000", "600519", "601318"])]  # 去重后 3 只进过滤
     assert [c for c in calls if c[0] == "analyze"] == [
         ("analyze", "600000"), ("analyze", "600519"), ("analyze", "601318")]  # 600519 去重
     traces = [c for c in calls if c[0] == "trace"]
@@ -180,6 +209,98 @@ def test_post_market_chain_end_to_end_injected(monkeypatch):
     for t in traces:
         assert isinstance(t[2], str) and t[2].startswith("{")   # prompt_version 非空(PROMPT_VERSIONS 快照)
         assert isinstance(t[3], str) and t[3]                    # model_version 非空
+        assert isinstance(t[4], dict) and t[4]["analysis_id"] == 123456  # ①:落 analysis_id(生产去重最后一环)
+
+
+def test_post_market_risk_filter_result_used(monkeypatch):
+    """风险过滤(②)接线:注入 filter 断言被调用,且过滤结果用作分析候选。"""
+    import automation.risk_filter as rf
+    import interfaces.analyze as az
+    import interfaces.ai_trace as ait
+    calls = []
+
+    def fake_screen(selector, params=None, universe=None, raise_on_empty=True):
+        rows = {"chanlun": [("600000", "浦发"), ("600519", "茅台")],
+                "combo": [("600519", "茅台"), ("601318", "平安")]}[selector]
+        return pd.DataFrame({"代码": [r[0] for r in rows], "名称": [r[1] for r in rows],
+                             "信号": [""] * len(rows), "得分": [""] * len(rows),
+                             "备注": [""] * len(rows)})
+    monkeypatch.setattr(scr, "screen_stocks", fake_screen)
+
+    def fake_default_filter():
+        def filt(df):
+            calls.append(("risk_filter", len(df)))
+            return df[df["代码"] != "600519"]   # 剔除茅台:过滤结果必须被使用
+        return filt
+    monkeypatch.setattr(rf, "default_risk_filter", fake_default_filter)
+
+    analyzed = []
+    monkeypatch.setattr(az, "analyze_stock",
+                        lambda code, period="1y", with_ai=True: analyzed.append(code) or _fake_analysis_result(code))
+    monkeypatch.setattr(ait, "trace_save", lambda *a, **k: 1)
+
+    res = automation.run_jobs(jobs.POST_MARKET_JOBS, phase="post_market")
+    assert res["收盘后选股"] == "ok"
+    assert calls == [("risk_filter", 3)]       # 去重后 3 只进入过滤
+    assert analyzed == ["600000", "601318"]    # 过滤结果被用作分析候选
+
+
+def test_post_market_signal_recording_wired(monkeypatch):
+    """信号记录(③)接线:逐组合对 信号 列非空的命中行调 record_signals。"""
+    import automation.risk_filter as rf
+    import automation.signal_tracking as st
+    import interfaces.analyze as az
+    import interfaces.ai_trace as ait
+    calls = []
+
+    def fake_screen(selector, params=None, universe=None, raise_on_empty=True):
+        rows = {"chanlun": [("600000", "浦发", "买点"), ("600519", "茅台", "")],
+                "combo": [("600519", "茅台", "")]}[selector]
+        return pd.DataFrame({
+            "代码": [r[0] for r in rows],
+            "名称": [r[1] for r in rows],
+            "信号": [r[2] for r in rows],
+            "日期": ["2026-09-25"] * len(rows),
+            "是否盈利": [1] * len(rows),
+            "区间涨跌幅": [0.05] * len(rows),
+        })
+    monkeypatch.setattr(scr, "screen_stocks", fake_screen)
+    monkeypatch.setattr(rf, "default_risk_filter", lambda: (lambda df: df))
+    monkeypatch.setattr(az, "analyze_stock",
+                        lambda code, period="1y", with_ai=True: _fake_analysis_result(code))
+    monkeypatch.setattr(ait, "trace_save", lambda *a, **k: 1)
+
+    def fake_record(combo_name, df, mask, reason="市场环境"):
+        calls.append((combo_name, len(df), int(mask.sum()), reason))
+        return 1
+    monkeypatch.setattr(st, "record_signals", fake_record)
+
+    res = automation.run_jobs(jobs.POST_MARKET_JOBS, phase="post_market")
+    assert res == {"收盘后选股": "ok", "收盘后分析": "ok", "收盘后信号记录": "ok"}
+    # 命中行按 信号 列非空:chanlun 两行命中一行;combo 信号全空 → 不调用
+    assert calls == [("chanlun", 2, 1, "市场环境")]
+
+
+def test_post_market_signal_recording_missing_cols_warns(monkeypatch, caplog):
+    """信号记录(③)缺 代码/日期/是否盈利/区间涨跌幅 列:告警并跳过,不静默。"""
+    import automation.risk_filter as rf
+    import automation.signal_tracking as st
+    import interfaces.analyze as az
+    import interfaces.ai_trace as ait
+
+    monkeypatch.setattr(scr, "screen_stocks",
+                        lambda *a, **k: pd.DataFrame({"代码": ["600000"], "名称": ["浦发"],
+                                                      "信号": ["买点"], "得分": [""], "备注": [""]}))
+    monkeypatch.setattr(rf, "default_risk_filter", lambda: (lambda df: df))
+    monkeypatch.setattr(az, "analyze_stock",
+                        lambda code, period="1y", with_ai=True: _fake_analysis_result(code))
+    monkeypatch.setattr(ait, "trace_save", lambda *a, **k: 1)
+    monkeypatch.setattr(st, "record_signals",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("缺列不应落追踪表")))
+    with caplog.at_level(logging.WARNING):
+        res = automation.run_jobs(jobs.POST_MARKET_JOBS, phase="post_market")
+    assert res["收盘后信号记录"] == "ok"          # 告警 + 跳过,不阻断任务链
+    assert any("缺列" in r.getMessage() for r in caplog.records)   # 告警留痕(不静默)
 
 
 def test_post_market_analysis_degraded_marks_failed(monkeypatch):

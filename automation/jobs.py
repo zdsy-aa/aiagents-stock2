@@ -6,14 +6,17 @@
 - ``INTRADAY_JOBS`` 盘中:信号扫描(scan_signals 对重点池 ``WATCHLIST``,池为空
   跳过,不加载 15M 确认面板);
 - ``POST_MARKET_JOBS`` 收盘后:选股(screen_stocks("chanlun"/"combo",
-  raise_on_empty=False)→ 风险过滤占位(Task 5.2 就绪后接)→ 分析(analyze_stock
-  对候选前 ``ANALYZE_TOP_N`` 只,经 interfaces.ai_trace.trace_save 落
-  prompt_version/model_version,P5-1)→ 信号记录占位(Task 5.3)。
+  raise_on_empty=False)→ 风险前置过滤(default_risk_filter,规则不可用时按
+  risk_filter 模块自身语义透传)→ 分析(analyze_stock 对候选前 ``ANALYZE_TOP_N``
+  只,经 interfaces.ai_trace.trace_save 落 prompt_version/model_version 与
+  input_snapshot.analysis_id,P5-1/P5-6)→ 信号记录(signal_tracking.record_signals,
+  逐组合对选股结果 信号 列非空的命中行落追踪表,P5-3)。
 
 任务函数全部是模块级薄封装,函数体内延迟 import 被封装模块,测试可
 monkeypatch 被封装模块的接口函数注入假实现,不真实跑网络/发信/加载 15M 面板。
-告警入口 ``alert_failures`` 的邮件发送器在调用时解析为 ``jobs.send_mail``,
-测试 monkeypatch ``jobs.send_mail`` 即生效。
+告警入口 ``alert_failures`` 经 automation.alert.alert_failures 统一走
+automation.notify.notify 通道(mail=False 仅 log 通道),测试 monkeypatch
+``automation.notify.notify`` 或 ``jobs.send_mail`` 即生效。
 """
 import json
 import logging
@@ -41,17 +44,22 @@ ANALYZE_TOP_N = 5
 # 收盘后选股器顺序(本地库类,零参数可跑;空表以 raise_on_empty=False 跳过)。
 POST_SCREEN_SELECTORS = ("chanlun", "combo")
 
-# 收盘后选股 → 分析 之间的候选传递(选股任务写入,分析/信号记录任务读取)。
+# 收盘后选股 → 分析 之间的候选传递(选股任务写入,分析任务读取)。
 _last_candidates = []
+
+# 收盘后选股 → 信号记录 之间的逐组合结果传递(选股任务写入,信号记录任务读取;
+# 元素 (combo_name, df),df 为未去重/未风险过滤的选股原始结果)。
+_last_signal_frames = []
 
 
 def alert_failures(res, mail=True):
     """失败告警入口(jobs 命名空间):见 automation.alert.alert_failures。
 
-    邮件发送器在调用时解析为 ``jobs.send_mail``,测试 monkeypatch
-    ``jobs.send_mail`` 即生效;``mail=False`` 时仅日志。
+    告警经统一 notify 通道投递(alert_failures 内部延迟 import
+    automation.notify.notify),``mail=False`` 时仅 log 通道(输出 stdout);
+    测试可 monkeypatch ``automation.notify.notify`` 注入假通道。
     """
-    return _alert_failures(res, mail=mail, _sender=send_mail)
+    return _alert_failures(res, mail=mail)
 
 
 # ---------- 开盘前 ----------
@@ -99,36 +107,44 @@ def _scan_intraday_focus_pool():
 # ---------- 收盘后 ----------
 
 def _screen_post_market():
-    """收盘后选股:chanlun/combo 本地选股器(空表不抛错)合并去重,写入候选。
+    """收盘后选股:chanlun/combo 本地选股器(空表不抛错)合并去重 → 风险前置
+    过滤 → 写入候选;逐组合原始结果另存供信号记录任务读取。
 
     两个选股器均执行失败(异常,而非空表)时抛 RuntimeError → 任务 failed →
     告警(全局约束:数据不可用不得静默);空表(今日无信号)属正常市况,跳过分析。
+    风险过滤规则因前置条件不满足(列缺失/依赖模块不可用)时按 risk_filter
+    模块自身语义透传并记录,不阻断选股链路。
     """
-    global _last_candidates
+    global _last_candidates, _last_signal_frames
     from interfaces.screen import screen_stocks
 
-    frames, errors = [], []
+    pairs, errors = [], []
     for sel in POST_SCREEN_SELECTORS:
         try:
-            frames.append(screen_stocks(sel, raise_on_empty=False))
+            pairs.append((sel, screen_stocks(sel, raise_on_empty=False)))
         except RuntimeError as exc:
             errors.append(f"{sel}: {exc}")
             logger.warning("收盘后选股 %s 失败: %s", sel, exc)
-    if not frames and errors:
+    if not pairs and errors:
         _last_candidates = []
+        _last_signal_frames = []
         raise RuntimeError("收盘后选股全部失败: " + "; ".join(errors))
 
     _last_candidates = []
-    if not frames:
+    if not pairs:
+        _last_signal_frames = []
         logger.warning("收盘后选股无候选(chanlun/combo 均空),本轮跳过分析")
         return
     import pandas as pd
 
-    candidates = pd.concat(frames, ignore_index=True)
+    candidates = pd.concat([df for _, df in pairs], ignore_index=True)
     candidates = candidates.drop_duplicates(subset=["代码"], keep="first")
-    # TODO(Task 5.2): 风险前置过滤占位(import 注释,就绪后接):
-    #     from automation.risk_filter import default_risk_filter
-    #     candidates = default_risk_filter()(candidates)
+    # 风险前置过滤(T5.2 接线):规则不可用时按 risk_filter 模块自身语义透传
+    from automation.risk_filter import default_risk_filter
+
+    candidates = default_risk_filter()(candidates)
+    # 信号记录数据源:逐组合未去重/未过滤的选股结果(命中行按 信号 列非空)
+    _last_signal_frames = list(pairs)
     _last_candidates = [str(c) for c in candidates["代码"].tolist()]
     logger.info("收盘后选股候选 %d 只: %s", len(_last_candidates), _last_candidates)
 
@@ -175,7 +191,8 @@ def _save_analysis_trace(result):
         prompt_version=json.dumps(PROMPT_VERSIONS, ensure_ascii=False),
         model_version=_current_model_version(),
         input_snapshot={"source": "automation.jobs 收盘后分析",
-                        "generated_at": result.get("generated_at", "")},
+                        "generated_at": result.get("generated_at", ""),
+                        "analysis_id": result.get("analysis_id")},
     )
 
 
@@ -212,10 +229,36 @@ def _analyze_post_market():
 
 
 def _record_signals_post_market():
-    """收盘后信号记录:占位任务(Task 5.3 就绪后接入 signal_tracking.record_signals)。"""
-    # TODO(T5.3): from automation.signal_tracking import record_signals
-    #   对收盘后选股结果逐组合落信号追踪表(组合名/代码/日期/命中 mask)。
-    logger.info("收盘后信号记录为占位任务(T5.3 就绪后接线),本轮跳过")
+    """收盘后信号记录(T5.3 接线):逐组合对选股结果的命中行(信号 列非空)调
+    signal_tracking.record_signals 落信号追踪表。
+
+    df 需含 代码/日期/是否盈利/区间涨跌幅 列(组合名/命中 mask 另传);缺列时
+    记录告警并跳过该信号——全局约束「数据不可用不得静默」以告警日志留痕,
+    不阻断任务链(信号记录属复盘侧,缺失属选股结果未携带结果列的正常形态)。
+    """
+    from automation.signal_tracking import record_signals
+
+    if not _last_signal_frames:
+        logger.info("收盘后选股结果为空,无信号可记录")
+        return
+    required = ("代码", "日期", "是否盈利", "区间涨跌幅")
+    for combo_name, df in _last_signal_frames:
+        if df is None or len(df) == 0:
+            continue
+        if "信号" not in df.columns:
+            logger.warning("组合 %s 选股结果缺「信号」列,跳过该信号记录(不静默)", combo_name)
+            continue
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            logger.warning("组合 %s 选股结果缺列 %s,跳过该信号记录(不静默)",
+                           combo_name, missing)
+            continue
+        mask = df["信号"].notna() & (df["信号"].astype(str).str.strip() != "")
+        if not mask.any():
+            logger.info("组合 %s 无命中信号,跳过记录", combo_name)
+            continue
+        n = record_signals(combo_name, df, mask, reason="市场环境")
+        logger.info("组合 %s 收盘后信号记录 %d 条", combo_name, n)
 
 
 # ---------- 三时段任务清单 ----------
