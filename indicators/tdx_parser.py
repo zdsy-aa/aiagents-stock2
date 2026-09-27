@@ -12,6 +12,10 @@
 - 原子:数字(含小数)、字符串字面量('...')、变量名(中文/英文标识符,
   [A-Za-z_一-龥][A-Za-z0-9_一-龥]*)、函数调用 FUNC(arg1,...,argN)、括号、
   三元 IF(cond,a,b)(特化为 ternary 节点)、NOT(x)(特化为 not 节点)
+- 数字开头标识符亦支持(控制器裁决):词法层先匹配最大数字部分再扫描紧随的
+  标识符字符,整体为一个 id token —— 语料:六脉神剑V5 的 6红原始/5红原始/
+  6红首发原/5红首发原/6红距上次/5红距上次(如 `6红原始`;空白分隔的
+  `0.99 AND` 仍为数字 + 运算符)
 
 AST 节点(与简报一致,供 Task 2.2 求值器依赖):
   {"op": "num", "val": 1.0}
@@ -27,14 +31,13 @@ AST 节点(与简报一致,供 Task 2.2 求值器依赖):
 语料实测零 syntax_error,全部 warnings 属于下列类别):
 1. draw_stmt:DRAW*/STICKLINE 等绘图语句(STICKLINE / DRAWTEXT / DRAWTEXT_FIX /
    DRAWBAND / DRAWICON,无 NAME: 头的函数调用语句头)—— 语料 330 处
-2. digit_id:数字开头的标识符 —— 语料特例:六脉神剑V5 的 6红原始/5红原始/
-   6红首发原/5红首发原/6红距上次/5红距上次(简报标识符正则不允许数字开头,
-   按 R2.1-A 登记跳过,是否扩语法面由控制器裁决)
-3. bare_output:裸表达式输出语句(无 NAME: 头,如 `CLOSE,COLORWHITE,NODRAW;`)
+2. bare_output:裸表达式输出语句(无 NAME: 头,如 `CLOSE,COLORWHITE,NODRAW;`)
    —— 语料 1 处(缠论_主图V9 末行),R2.1-A 登记
-4. recursive_assign:递归 :=(RHS 中引用自身变量名,求值层禁止;解析层检测跳过)
-5. 数组下标 `X[1]`(语料 0 处,防御性检测)
-6. `#` 预处理指令(语料 0 处,防御性检测)
+3. recursive_assign:递归 :=(RHS 中引用自身变量名,求值层禁止;解析层检测跳过)
+4. 数组下标 `X[1]`(语料 0 处,防御性检测)
+5. `#` 预处理指令(语料 0 处,防御性检测)
+注:数字开头标识符(原按 R2.1-A 登记的 digit_id)经控制器裁决改为**支持**,
+已在词法层消歧实现,不再跳过。
 """
 import bisect
 import re
@@ -56,6 +59,13 @@ _TOKEN_RE = re.compile(
 )
 
 _DRAW_STMT_RE = re.compile(r"^(DRAW[A-Za-z0-9_]*|STICKLINE)$")
+
+# 数字开头 token 的消歧(控制器裁决:数字开头标识符必须支持):
+# 先匹配最大数字部分 \d+\.?\d*,再扫描紧随的标识符字符 [0-9A-Za-z_一-龥]*;
+# 若紧随部分非空(如「6红原始」的 红原始)→ 整个 token 为一个 id;
+# 否则(如「0.99 AND」,数字后是空白/分隔符)→ 纯数字 token。
+_DIGIT_TOKEN_RE = re.compile(r"\d+\.?\d*")
+_TRAIL_ID_RE = re.compile(r"[0-9A-Za-z_一-龥]*")
 
 
 def _extract_comments(text, warnings):
@@ -117,6 +127,18 @@ def _tokenize(text, warnings):
     toks = []
     i, n = 0, len(text)
     while i < n:
+        if "0" <= text[i] <= "9":  # 数字开头:整体扫描后再判定 num / id
+            m = _DIGIT_TOKEN_RE.match(text, i)
+            num_end = m.end()
+            t = _TRAIL_ID_RE.match(text, num_end)
+            if t.end() > num_end:  # 含标识符字符 → 数字开头标识符,一个 id
+                kind, value, end = "id", text[i:t.end()], t.end()
+            else:
+                kind, value, end = "num", text[i:num_end], num_end
+            toks.append(_Tok(kind, value, i, end,
+                             bisect.bisect_right(line_starts, i)))
+            i = end
+            continue
         m = _TOKEN_RE.match(text, i)
         if m is None:
             if text[i].isspace():
@@ -269,11 +291,6 @@ class _Parser:
         start_tok = self._peek()
         if start_tok is None:
             return None
-        if start_tok.kind == "num":
-            raise _SkipStatement(
-                "digit_id",
-                f"语句头 {start_tok.value!r} 不是标识符(数字开头的标识符暂不支持)",
-            )
         if start_tok.kind != "id":
             if start_tok.kind == "op" and start_tok.value == "#":
                 raise _SkipStatement("preprocessor", "# 预处理指令暂不支持")
@@ -374,14 +391,6 @@ class _Parser:
             raise _ParseError("表达式意外结束")
         if t.kind == "num":
             self._next()
-            nxt = self._peek()
-            # 字符级紧邻(无空白)才是数字开头标识符(如 6红原始);
-            # 空白分隔的 `0.99 AND` 不是
-            if nxt is not None and nxt.kind == "id" and nxt.start == t.end:
-                raise _SkipStatement(
-                    "digit_id",
-                    f"数字开头的标识符 {t.value}{nxt.value} 暂不支持",
-                )
             return {"op": "num", "val": float(t.value)}
         if t.kind == "str":
             self._next()

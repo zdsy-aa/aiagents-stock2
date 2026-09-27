@@ -4,9 +4,10 @@
 - 文件集 = tdx_v4_standalone 下全部 .txt,排除 99_说明手册 目录(4 个说明文件)
   与根目录 导入说明_必读.txt(也是说明文件,共 5 个,公式文件恰 32 个)
 - 每个文件 parse_formula 后 statements 非空
-- warnings 只能属于"已登记暂不支持"类别(draw_stmt / digit_id / bare_output /
-  recursive_assign / unclosed_comment);出现 syntax_error / lex_error 即语法面
+- warnings 只能属于"已登记暂不支持"类别(draw_stmt / bare_output /
+  recursive_assign / unclosed_comment 等);出现 syntax_error / lex_error 即语法面
   未覆盖,须按 R2.1-A 登记或修复 —— 本测试即"零语法错误"的机器可验形式
+  (数字开头标识符经控制器裁决改为支持,已从暂不支持移除)
 """
 import pathlib
 
@@ -17,9 +18,9 @@ SKIP_DIR = "99_说明手册"
 SKIP_FILES = {"导入说明_必读.txt"}
 
 # 与 indicators/tdx_parser.py 头部"暂不支持"登记一一对应
+# (数字开头标识符经控制器裁决改为支持,已从暂不支持移除)
 REGISTERED_WARNING_CATEGORIES = {
     "draw_stmt",          # DRAW*/STICKLINE 等绘图语句
-    "digit_id",           # 数字开头的标识符(六脉神剑V5 特例)
     "bare_output",        # 裸表达式输出语句(无 NAME: 头)
     "recursive_assign",   # 递归 :=
     "array_index",        # 数组下标 X[1](防御性,语料 0 处)

@@ -101,3 +101,32 @@ def test_multiline_statement_and_unary_minus():
     f = parse_formula(src)
     assert f["statements"][0]["expr"]["op"] == "ternary"
     assert len(f["warnings"]) == 0
+
+
+def test_digit_leading_identifier_supported():
+    # 控制器裁决:数字开头标识符必须支持(词法层整体扫描后判定 id)
+    src = ("6红原始:=六脉红灯>=6;\n"
+           "六脉6红首发:6红首发原 AND (6红距上次>=15 OR 6红距上次>=999),NODRAW;")
+    f = parse_formula(src)
+    assert [s["kind"] for s in f["statements"]] == ["assign", "output"]
+    s = f["statements"][0]
+    assert s["name"] == "6红原始"
+    assert s["expr"] == {"op": "bin", "oper": ">=",
+                         "left": {"op": "var", "name": "六脉红灯"},
+                         "right": {"op": "num", "val": 6.0}}
+    s2 = f["statements"][1]
+    assert s2["name"] == "六脉6红首发"
+    assert s2["expr"]["op"] == "bin" and s2["expr"]["oper"] == "AND"
+    assert s2["expr"]["left"] == {"op": "var", "name": "6红首发原"}
+    assert not f["warnings"]
+
+
+def test_number_followed_by_and_stays_number():
+    # 回归:空白分隔的 `0.99 AND` 不得并入标识符(整体扫描的边界)
+    f = parse_formula("涨停:C>=REF(C,1)*0.99 AND C>REF(C,1);")
+    s = f["statements"][0]
+    assert s["expr"]["op"] == "bin" and s["expr"]["oper"] == "AND"
+    left = s["expr"]["left"]
+    assert left["op"] == "bin" and left["oper"] == ">="
+    assert left["right"]["right"] == {"op": "num", "val": 0.99}
+    assert not f["warnings"]
