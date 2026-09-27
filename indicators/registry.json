@@ -145,5 +145,18 @@
       }
     ],
     "partial": true
+  },
+  "MACD": {
+    "source": "builtin:MACD",
+    "outputs": [
+      "DIFF",
+      "DEA",
+      "MACD"
+    ],
+    "signals": [],
+    "params": {},
+    "compiled_at": "2026-09-27T09:57:46",
+    "unsupported": [],
+    "partial": false
   }
 }
