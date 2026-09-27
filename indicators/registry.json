@@ -53,15 +53,17 @@
       },
       {
         "name": "六脉6红首发",
-        "direction": "both"
+        "direction": "buy"
       },
       {
         "name": "六脉5红首发",
-        "direction": "both"
+        "direction": "buy"
       }
     ],
     "params": {},
-    "compiled_at": "2026-09-27T09:01:37"
+    "compiled_at": "2026-09-27T09:06:18",
+    "unsupported": [],
+    "partial": false
   },
   "核心_基础V3": {
     "source": "/home/tdxback/通达信指标/20260424001/tdx_v4_standalone/00_公共核心模块/核心_基础V3.txt",
@@ -109,6 +111,39 @@
     ],
     "signals": [],
     "params": {},
-    "compiled_at": "2026-09-27T09:01:37"
+    "compiled_at": "2026-09-27T09:06:18",
+    "unsupported": [
+      {
+        "name": "获利盘",
+        "line": 93,
+        "category": "not_implemented",
+        "reason": "函数 WINNER 未登记:语料出现但映射表缺失(WINNER/NAMELIKE/FINANCE/DYNAINFO/HHVBARS/LLVBARS/SUMBARS/DMA),见 tdx_builtins 模块头"
+      },
+      {
+        "name": "活跃筹码",
+        "line": 94,
+        "category": "not_implemented",
+        "reason": "函数 WINNER 未登记:语料出现但映射表缺失(WINNER/NAMELIKE/FINANCE/DYNAINFO/HHVBARS/LLVBARS/SUMBARS/DMA),见 tdx_builtins 模块头"
+      },
+      {
+        "name": "套牢盘",
+        "line": 95,
+        "category": "not_implemented",
+        "reason": "函数 WINNER 未登记:语料出现但映射表缺失(WINNER/NAMELIKE/FINANCE/DYNAINFO/HHVBARS/LLVBARS/SUMBARS/DMA),见 tdx_builtins 模块头"
+      },
+      {
+        "name": "筹码集中",
+        "line": 96,
+        "category": "name_error",
+        "reason": "变量 '获利盘' 未定义(env 无此名且非列别名)"
+      },
+      {
+        "name": "筹码锁定",
+        "line": 97,
+        "category": "name_error",
+        "reason": "变量 '活跃筹码' 未定义(env 无此名且非列别名)"
+      }
+    ],
+    "partial": true
   }
 }

@@ -3,22 +3,26 @@ r"""指标编译与注册表(Task 2.3)。
 编译:读公式文件 → parse_formula → 逐语句 evaluate(合成 df 300 根,build_env
 注入列)并把结果写回 env(包括中间 := 语句)→ 汇总 outputs/params/signals。
 
-错误语义(控制器裁决:只注册「全语句可求值」的指标):
-- compile 逐语句捕获 NotImplementedError(如 WINNER 等 8 个未支持函数)、
-  NameError(未定义变量)及其他异常:该语句跳过并记入 result["errors"],
-  其余语句继续求值;outputs 只含成功求值的输出语句(「outputs 可为已成功
-  部分」);errors 非空 = 该指标 compile 失败(result["ok"] is False)。
-- register:compile 失败 → 拒绝写入 registry.json 并返回 False(错误清单
-  打印到 stderr);成功 → 写入(同名覆盖)并返回 True。
+错误语义(控制器裁决,部分注册):
+- compile 逐语句隔离求值:遇 NotImplementedError(如 WINNER 等 8 个未支持
+  函数)、NameError(未定义变量)及其他异常的语句,跳过并记入
+  result["errors"](注册表 entry["unsupported"],结构与 errors 一致),
+  后续语句继续求值;outputs 只含成功求值的输出语句;errors 非空 →
+  result["ok"] is False。
+- register:只要有 ≥1 个输出成功求值即写入 registry.json(同名覆盖)并返回
+  True;entry 增加 "partial": bool(存在 unsupported 即 true)与
+  "unsupported": [错误清单];outputs 为空(全部语句失败)才拒绝写入并
+  返回 False(错误清单打印 stderr)。
 - 核心_基础V3 含 5 条 WINNER 依赖语句(获利盘/活跃筹码/套牢盘 → 未实现
-  函数;筹码集中/筹码锁定 → 引用被跳过名),故 register(核心_基础V3) 返回
-  False;其条目由初始 bootstrap 直接写入 registry.json(控制器裁决
-  「registry.json 初始就含这两条」),详见 task-2.3-report.md 疑点节。
+  函数;筹码集中/筹码锁定 → 引用被跳过名)→ partial=true、unsupported=5;
+  六脉神剑V5 全语句可求值 → partial=false。
 
 信号标准化:输出名含「买/卖/首发」或头部注释【输出】节声明(声明名须为实际
-输出)→ signals 条目 {name, direction: buy|sell|both}(买→buy;卖→sell;
-首发/其他→both 默认,人工可在 registry.json 修正)。【输出】节匹配
-`【输出[^】]*】`(含【输出(对其他指标保持兼容)】变体),不含【对外输出】。
+输出)→ signals 条目 {name, direction: buy|sell|both}。direction 启发式
+(控制器裁决):含「卖」→sell;含「买」或「首发」→buy;其余→both(买/卖
+兼具按 sell 优先,与裁决列举顺序一致);人工可在 registry.json 修正。
+【输出】节匹配 `【输出[^】]*】`(含【输出(对其他指标保持兼容)】变体),
+不含【对外输出】。
 
 params:头部注释【参数说明】节正则提取「参数名: ... 默认 N」(简报正则
 `参数名:.*?默认?(\\d+)` 的落体);提取不到给空 dict——不臆造。语料当前无
@@ -96,12 +100,12 @@ def _extract_params(section):
 
 
 def _direction(name):
-    """买→buy;卖→sell;首发/其他(含同时含买卖)→both 默认。"""
-    has_buy, has_sell = "买" in name, "卖" in name
-    if has_buy and not has_sell:
-        return "buy"
-    if has_sell and not has_buy:
+    """direction 启发式(控制器裁决):卖→sell;买/首发→buy;其余→both。
+    买/卖兼具按 sell 优先(与裁决列举顺序一致)。"""
+    if "卖" in name:
         return "sell"
+    if "买" in name or "首发" in name:
+        return "buy"
     return "both"
 
 
@@ -177,13 +181,16 @@ def compile_indicator(txt_path, code_prefix="600000"):
 def register(txt_path, code_prefix="600000"):
     """编译并写入 registry.json(同名覆盖)。
 
-    返回 True=已写入;compile 失败(errors 非空)时拒绝写入、错误清单打印到
-    stderr 并返回 False(既有同名条目原样保留)。
+    部分注册语义(控制器裁决):只要有 ≥1 个输出成功求值即写入并返回 True,
+    entry 含 "partial"(存在 unsupported 即 true)与 "unsupported"(编译
+    错误清单,结构与 compile 的 errors 一致);outputs 为空(全部语句失败)
+    才拒绝写入、错误清单打印 stderr 并返回 False(既有同名条目原样保留)。
     """
     c = compile_indicator(txt_path, code_prefix=code_prefix)
-    if c["errors"]:
-        print(f"[registry] {c['name']} compile 失败({len(c['errors'])} 条错误),"
-              f"拒绝写入 registry.json:", file=sys.stderr)
+    if not c["outputs"]:
+        print(f"[registry] {c['name']} compile 失败:无任何输出成功求值"
+              f"({len(c['errors'])} 条错误),拒绝写入 registry.json:",
+              file=sys.stderr)
         for e in c["errors"]:
             print(f"  - 行 {e['line']} {e['name']}: [{e['category']}] {e['reason']}",
                   file=sys.stderr)
@@ -194,6 +201,8 @@ def register(txt_path, code_prefix="600000"):
         "signals": c["signals"],
         "params": c["params"],
         "compiled_at": datetime.now().isoformat(timespec="seconds"),
+        "unsupported": c["errors"],
+        "partial": bool(c["errors"]),
     })
     return True
 
@@ -207,7 +216,8 @@ def _write_entry(name, entry):
 
 
 def load_registry():
-    """读 registry.json → {名称: {source, outputs, signals, params, compiled_at}}。
+    """读 registry.json → {名称: {source, outputs, signals, params, compiled_at,
+    unsupported, partial}}。
 
     文件不存在返回 {}(供流水线首跑/check-new 比对);
     JSON 损坏则抛 JSONDecodeError(真实问题应暴露)。
