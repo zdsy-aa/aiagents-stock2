@@ -1,0 +1,114 @@
+{
+  "六脉神剑V5": {
+    "source": "/home/tdxback/通达信指标/20260424001/tdx_v4_standalone/03_资金流向体系/六脉神剑V5.txt",
+    "outputs": [
+      "MACD多",
+      "KDJ多",
+      "RSI多",
+      "LWR多",
+      "BBI多",
+      "MTM多",
+      "六脉得分",
+      "六脉红灯",
+      "六脉6红首发",
+      "六脉5红首发",
+      "得分曲线",
+      "均线",
+      "强势线",
+      "中轴",
+      "弱势线"
+    ],
+    "signals": [
+      {
+        "name": "MACD多",
+        "direction": "both"
+      },
+      {
+        "name": "KDJ多",
+        "direction": "both"
+      },
+      {
+        "name": "RSI多",
+        "direction": "both"
+      },
+      {
+        "name": "LWR多",
+        "direction": "both"
+      },
+      {
+        "name": "BBI多",
+        "direction": "both"
+      },
+      {
+        "name": "MTM多",
+        "direction": "both"
+      },
+      {
+        "name": "六脉得分",
+        "direction": "both"
+      },
+      {
+        "name": "六脉红灯",
+        "direction": "both"
+      },
+      {
+        "name": "六脉6红首发",
+        "direction": "both"
+      },
+      {
+        "name": "六脉5红首发",
+        "direction": "both"
+      }
+    ],
+    "params": {},
+    "compiled_at": "2026-09-27T09:01:37"
+  },
+  "核心_基础V3": {
+    "source": "/home/tdxback/通达信指标/20260424001/tdx_v4_standalone/00_公共核心模块/核心_基础V3.txt",
+    "outputs": [
+      "涨停幅度",
+      "涨停",
+      "跌停",
+      "真一字板",
+      "当前波幅",
+      "长期波幅",
+      "适应系数",
+      "N",
+      "M",
+      "VS",
+      "VL",
+      "修正量",
+      "VOL_MA_S",
+      "VOL_MA_L",
+      "放量",
+      "缩量",
+      "量比",
+      "价涨",
+      "价跌",
+      "振幅",
+      "多方占比",
+      "空方占比",
+      "强势上攻",
+      "加速下跌",
+      "上涨乏力",
+      "下跌衰竭",
+      "K_MA5",
+      "K_MA10",
+      "K_MA20",
+      "K_MA60",
+      "K_MA120",
+      "净资金流",
+      "净资金累计",
+      "净资金均线",
+      "大单阈值",
+      "主力参与",
+      "主力净方向",
+      "主力累计",
+      "流动规模",
+      "主力强度"
+    ],
+    "signals": [],
+    "params": {},
+    "compiled_at": "2026-09-27T09:01:37"
+  }
+}
