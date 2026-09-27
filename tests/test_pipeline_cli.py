@@ -37,8 +37,13 @@ REG_PATH = REPO / "indicators" / "registry.json"
 
 
 @pytest.fixture
-def backup_restore():
-    """快照 registry.json 并临时移除 MACD(简报前置),测试结束还原。"""
+def backup_restore(tmp_path, monkeypatch):
+    """快照 registry.json 并临时移除 MACD(简报前置),测试结束还原。
+
+    文档产物同样隔离:ip.DOCS_DIR 重定向到 tmp_path —— cmd_run 注册成功后
+    追加生成文档(Task 2.5 衔接),不能写进仓库 docs/indicators/。
+    """
+    monkeypatch.setattr(ip, "DOCS_DIR", tmp_path / "docs")
     original = REG_PATH.read_bytes() if REG_PATH.exists() else None
     if original is not None:
         reg = ip.json.loads(original.decode("utf-8"))
@@ -192,6 +197,28 @@ def test_run_macd_end_to_end(backup_restore):
     assert set(out) == {"DIFF", "DEA", "MACD"}
     for nm, v in out.items():
         assert len(v) == 50 and np.isfinite(v.to_numpy()).all(), nm
+    # 注册成功后追加文档生成(转换→冒烟→注册→文档,与 docs 子命令共用渲染)
+    doc = ip.DOCS_DIR / "MACD.md"
+    assert doc.exists()
+    txt = doc.read_text(encoding="utf-8")
+    for sec in ("指标说明", "原始公式", "转换逻辑", "参数说明",
+                "买入信号", "卖出信号", "适用周期", "失效条件"):
+        assert sec in txt, sec
+    assert "EMA(CLOSE,12)" in txt          # 原始公式引自内置公式文本
+
+
+def test_run_register_failure_generates_no_doc(backup_restore):
+    # 缠论Pro副图V6 全语句求值失败(0 输出)→ register 拒绝写入,不生成文档
+    assert ip.cmd_run("缠论Pro副图V6", "600000") == 1
+    assert not (ip.DOCS_DIR / "缠论Pro副图V6.md").exists()
+
+
+def test_run_file_source_generates_doc(backup_restore):
+    # 文件型指标:registry 名按文件 stem,文档同名(与 docs 子命令同渲染)
+    assert ip.cmd_run("资金移动V5", "600000") == 0
+    doc = ip.DOCS_DIR / "资金移动V5.md"
+    assert doc.exists()
+    assert "## 转换逻辑" in doc.read_text(encoding="utf-8")
 
 
 def test_run_all_registers_corpus(backup_restore):

@@ -3,7 +3,7 @@
 
 子命令:
   check-new            输出「新增指标」清单(规则见 find_new_names)
-  run <名称> [--code]  定位公式 → 冒烟 → 注册(partial 允许成功并标注)
+  run <名称> [--code]  定位公式 → 冒烟 → 注册 → 文档(partial 允许成功并标注)
   run-all [--code]     语料 32 个公式文件全部 编译+冒烟+注册(不生成文档)
   smoke <名称> [--code] 仅冒烟(合成 df 300 根,输出全 finite 且长度=n)
   docs <名称> [--code] 生成单指标文档 docs/indicators/<名称>.md(Task 2.5)
@@ -296,7 +296,14 @@ def cmd_smoke(name, code_prefix="600000"):
     return 0
 
 
-def cmd_run(name, code_prefix="600000"):
+def cmd_run(name, code_prefix="600000", generate_doc=True):
+    """run 子命令:定位 → 冒烟 → 注册 →(注册成功后)文档生成。
+
+    generate_doc=True 时在 register 成功后追加 cmd_docs 的渲染逻辑
+    (_generate_doc),使一条 `run <名称>` 完成 转换→冒烟→注册→文档;
+    cmd_docs 的自动注册路径传 False(文档由 cmd_docs 统一生成一次)。
+    register 失败(0 输出)照旧 exit 1 且不生成文档。
+    """
     loc = _locate(name)
     if loc is None:
         print(f"[run] 未找到公式: {name!r}(registry 无条目、公式库无匹配、"
@@ -330,8 +337,10 @@ def cmd_run(name, code_prefix="600000"):
         if not ok:
             print(f"[run] {name} register 拒绝写入(0 输出)", file=sys.stderr)
             return 1
+        reg_name = loc["path"].stem   # register 按文件 stem 登记
     else:
         _write_builtin_entry(name, outputs, errors)
+        reg_name = name
     print(f"[register] {name}: outputs={list(outputs.keys())}, "
           f"partial={partial}")
     if partial:
@@ -340,7 +349,17 @@ def cmd_run(name, code_prefix="600000"):
         for e in errors[:5]:
             print(f"  - 行 {e['line']} {e['name']}: [{e['category']}] "
                   f"{e['reason']}")
-    print(f"[run] {name} 完成:转换→冒烟→注册 ✓")
+    if not generate_doc:
+        print(f"[run] {name} 完成:转换→冒烟→注册 ✓")
+        return 0
+    entry = load_registry().get(reg_name)
+    if entry is None:
+        print(f"[run] {name} 警告:注册后 registry 查无 {reg_name!r} 条目,"
+              f"文档未生成", file=sys.stderr)
+        print(f"[run] {name} 完成:转换→冒烟→注册 ✓(文档未生成)")
+        return 0
+    _generate_doc(reg_name, entry)
+    print(f"[run] {name} 完成:转换→冒烟→注册→文档 ✓")
     return 0
 
 
@@ -542,6 +561,23 @@ def _render_doc(name, entry, loc):
     return "\n".join(out) + "\n"
 
 
+def _generate_doc(name, entry):
+    """按 registry 条目渲染并写出 docs/indicators/<名称>.md(渲染唯一出处)。
+
+    cmd_docs 与 cmd_run(注册成功后追加文档)共用本函数,输出口径一致。
+    """
+    loc = _locate(name)
+    if loc is None:
+        print(f"[docs] 警告:未定位到源文件,原始公式/指标说明小节将标注待补充",
+              file=sys.stderr)
+    out_path = DOCS_DIR / f"{name}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(_render_doc(name, entry, loc), encoding="utf-8")
+    print(f"[docs] {name}: 已生成 {out_path}(outputs "
+          f"{len(entry.get('outputs') or [])} 个,partial="
+          f"{bool(entry.get('partial'))})")
+
+
 def cmd_docs(name, code_prefix="600000"):
     """生成 docs/indicators/<名称>.md。
 
@@ -552,7 +588,8 @@ def cmd_docs(name, code_prefix="600000"):
     entry = load_registry().get(name)
     if entry is None:
         print(f"[docs] registry 无 {name!r} 条目 → 先自动注册(run 逻辑)")
-        if cmd_run(name, code_prefix) != 0:
+        # generate_doc=False:注册由 cmd_run 完成,文档由本函数统一生成一次
+        if cmd_run(name, code_prefix, generate_doc=False) != 0:
             print(f"[docs] {name!r} 自动注册失败,无法生成文档(exit 1)",
                   file=sys.stderr)
             return 1
@@ -566,16 +603,7 @@ def cmd_docs(name, code_prefix="600000"):
             print(f"[docs] {name!r} 注册成功但 registry 查无对应条目,"
                   f"无法生成文档(exit 1)", file=sys.stderr)
             return 1
-    loc = _locate(name)
-    if loc is None:
-        print(f"[docs] 警告:未定位到源文件,原始公式/指标说明小节将标注待补充",
-              file=sys.stderr)
-    out_path = DOCS_DIR / f"{name}.md"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(_render_doc(name, entry, loc), encoding="utf-8")
-    print(f"[docs] {name}: 已生成 {out_path}(outputs "
-          f"{len(entry.get('outputs') or [])} 个,partial="
-          f"{bool(entry.get('partial'))})")
+    _generate_doc(name, entry)
     return 0
 
 
@@ -593,7 +621,7 @@ def main(argv=None):
                                       "add_zb.txt 归并后与 registry∪all.txt "
                                       "比对;无新增 exit 0)")
 
-    p_run = sub.add_parser("run", help="定位公式→compile→冒烟→register")
+    p_run = sub.add_parser("run", help="定位公式→compile→冒烟→register→文档")
     p_run.add_argument("name")
     p_run.add_argument("--code", default="600000",
                        help="证券代码前缀(CODELIKE 编译期求值用)")
