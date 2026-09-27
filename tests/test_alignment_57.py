@@ -103,6 +103,7 @@ def test_top50_alignment():
     for row in skipped:
         print("  SKIP", row)
     assert not fails, fails
+    assert not skipped, skipped  # 终审前置项:57 spec 应全部可用,无跳过
 
 
 def _dn_rate(spec, te):
@@ -147,6 +148,7 @@ def test_tq51_57_alignment():
     for row in skipped:
         print("  SKIP", row)
     assert not fails, fails
+    assert not skipped, skipped  # 终审前置项:TQ51~57 spec 应全部可用,无跳过
 
 
 def test_tq51_57_v1_cross_check():
@@ -161,6 +163,9 @@ def test_tq51_57_v1_cross_check():
     fails, skipped, dev = [], [], []
     for name, ref in REFS_51_57.items():
         spec = specs[name] if name != "TQ51" else _tq51_subspec(specs["TQ51"])
+        if spec.get("unavailable"):
+            _record(skipped, name, f"spec unavailable: {spec.get('reason')}")
+            continue
         r_tr = run_backtest(spec, tr)
         r_te = run_backtest(spec, te)
         n_full = r_tr["n"] + r_te["n"]
@@ -180,3 +185,4 @@ def test_tq51_57_v1_cross_check():
     for row in dev:
         print("  DEV ", row)
     assert not fails, fails
+    assert not skipped, skipped  # 终审前置项:TQ51~57 spec 应全部可用,无跳过
