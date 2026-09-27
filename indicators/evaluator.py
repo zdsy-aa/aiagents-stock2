@@ -14,9 +14,12 @@ AST 节点:num/str/var/call/bin/ternary/not/neg(见 tdx_parser 模块头)。
       (成交额:=V*C/100 的语料口径)。
 
 语义要点:
-  - IF(cond,a,b) 由解析器特化为 ternary 节点;cond 为 Series 时 NaN 视为
-    False(pandas astype(bool) 会把 NaN 当 True,必须 fillna 兜底),结果按
-    cond 索引构造 Series(np.where 会丢失索引);
+  - IF(cond,a,b) 由解析器特化为 ternary 节点;标量条件惰性求值(只求值被
+    选中的分支,未选中分支完全不求值,简报「惰性求值由 AST 层处理」);
+    Series 条件时两分支均会求值(向量化 np.where 语义,与通达信向量化语义
+    一致,语料 Series 条件的分支均为已定义变量),NaN 视为 False(pandas
+    astype(bool) 会把 NaN 当 True,必须 fillna 兜底),结果按 cond 索引构造
+    Series(np.where 会丢失索引);
   - AND/OR:布尔上下文真值(非零即真);Series 侧 fillna(False);
   - NOT:同上(NaN 视为 False);
   - 比较运算:pandas 比较天然把 NaN 一侧判为 False(与 TDX 布尔语境一致);
@@ -82,12 +85,13 @@ def _bin(oper, l, r):
 
 
 def _ternary(cond, a, b):
-    if isinstance(cond, pd.Series):
-        c = cond.fillna(False).astype(bool)  # NaN 条件视为假(TDX 口径)
-        av = a if np.isscalar(a) else a.reindex(c.index).to_numpy()
-        bv = b if np.isscalar(b) else b.reindex(c.index).to_numpy()
-        return pd.Series(np.where(c.to_numpy(), av, bv), index=c.index)
-    return a if bool(cond) else b
+    """IF(cond,a,b) 的 Series 条件分支(向量化 np.where 语义;标量条件的
+    惰性求值在 evaluate_ast 完成,不经过此处)。NaN 条件视为假(TDX 口径;
+    pandas astype(bool) 会把 NaN 当 True,必须 fillna 兜底)。"""
+    c = cond.fillna(False).astype(bool)
+    av = a if np.isscalar(a) else a.reindex(c.index).to_numpy()
+    bv = b if np.isscalar(b) else b.reindex(c.index).to_numpy()
+    return pd.Series(np.where(c.to_numpy(), av, bv), index=c.index)
 
 
 def evaluate_ast(ast, env, code_prefix=_DEFAULT_CODE_PREFIX):
@@ -120,9 +124,17 @@ def evaluate_ast(ast, env, code_prefix=_DEFAULT_CODE_PREFIX):
         return _bin(ast["oper"], l, r)
     if op == "ternary":
         cond = evaluate_ast(ast["cond"], env, code_prefix)
-        then = evaluate_ast(ast["then"], env, code_prefix)
-        other = evaluate_ast(ast["else"], env, code_prefix)
-        return _ternary(cond, then, other)
+        if isinstance(cond, pd.Series):
+            # Series 条件:向量化 np.where 语义,两分支均会求值(与通达信向量
+            # 化语义一致;未选中分支的未定义变量/未登记函数同样会抛错)。
+            then = evaluate_ast(ast["then"], env, code_prefix)
+            other = evaluate_ast(ast["else"], env, code_prefix)
+            return _ternary(cond, then, other)
+        # 标量条件:惰性求值 —— 只求值被选中的分支,未选中分支完全不求值
+        # (简报:「惰性求值由 AST 层处理」)
+        if bool(cond):
+            return evaluate_ast(ast["then"], env, code_prefix)
+        return evaluate_ast(ast["else"], env, code_prefix)
     if op == "call":
         func = ast["func"]
         args = [evaluate_ast(a, env, code_prefix) for a in ast["args"]]

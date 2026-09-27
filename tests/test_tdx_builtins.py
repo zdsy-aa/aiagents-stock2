@@ -280,6 +280,39 @@ def test_ternary_scalar_cond_and_nan_cond():
     assert r.tolist() == [0.0, 2.0, 0.0]
 
 
+def test_ternary_lazy_scalar_cond():
+    # 控制器审查修复:标量条件惰性求值(简报「惰性求值由 AST 层处理」)——
+    # 未选中的分支完全不求值,引用未定义变量/未登记函数不抛错。
+    ast = {"op": "ternary", "cond": {"op": "num", "val": 0},
+           "then": {"op": "var", "name": "未定义变量"},
+           "else": {"op": "num", "val": 1}}
+    assert evaluate_ast(ast, {}) == 1
+    ast2 = {"op": "ternary", "cond": {"op": "num", "val": 1},
+            "then": {"op": "num", "val": 7},
+            "else": {"op": "call", "func": "WINNER",
+                     "args": [{"op": "var", "name": "CLOSE"}]}}
+    assert evaluate_ast(ast2, {}) == 7
+    # 与解析器特化联动:IF(0, 未定义变量, 2) 全链路
+    st = parse_formula("X:IF(0,未定义变量,2);")["statements"][0]
+    assert evaluate_ast(st["expr"], {}) == 2
+
+
+def test_ternary_series_cond_evaluates_both_branches():
+    # Series 条件:向量化 np.where 语义,两分支均会求值(与通达信向量化语义
+    # 一致)——未选中分支的未定义变量同样抛 NameError,行为钉住。
+    cond = pd.Series([True, False])
+    ast = {"op": "ternary", "cond": {"op": "var", "name": "C0"},
+           "then": {"op": "num", "val": 1},
+           "else": {"op": "var", "name": "未定义变量"}}
+    with pytest.raises(NameError):
+        evaluate_ast(ast, {"C0": cond})
+    # 两分支均可求值时按 cond 逐位选择(回归)
+    r = evaluate_ast({"op": "ternary", "cond": {"op": "var", "name": "C0"},
+                      "then": {"op": "num", "val": 1}, "else": {"op": "num", "val": 2}},
+                     {"C0": cond})
+    assert r.tolist() == [1.0, 2.0]
+
+
 def test_missing_function_raises_not_implemented():
     with pytest.raises(NotImplementedError, match="WINNER"):
         evaluate_ast({"op": "call", "func": "WINNER", "args": [{"op": "var", "name": "CLOSE"}]}, build_env(_df()))
