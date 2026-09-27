@@ -216,3 +216,39 @@ def test_analyze_stock_both_unavailable_degrades(monkeypatch):
 def test_interfaces_package_exports_analyze_stock():
     import interfaces
     assert callable(interfaces.analyze_stock)
+
+
+# ---- Task5.6 顺延裁决项(5.3 遗留):analysis_id 传播 ----
+# engine run_full_analysis 返回 dict 含 analysis_id(落库记录 id),4.1 映射时
+# 丢弃;5.6 起 analyze_stock 透传到返回 dict,使 ai_trace 的
+# (代码, analysis_id) 去重生产可用(Task5.3 已实现去重逻辑)。
+
+def test_analyze_stock_propagates_analysis_id(monkeypatch):
+    def fake_engine(symbol, period):
+        return {"analysis_id": 42, "agents_results": {},
+                "discussion_result": "讨论", "final_decision": "决策"}
+
+    _enable_engine(monkeypatch)
+    monkeypatch.setattr(az, "_run_engine_analysis", fake_engine)
+    r = az.analyze_stock("600000", with_ai=False)
+    assert r["analysis_id"] == 42
+    assert r["degraded"] is False
+
+
+def test_analyze_stock_analysis_id_none_when_engine_omits(monkeypatch):
+    def fake_engine(symbol, period):
+        return {"agents_results": {}, "discussion_result": "讨论",
+                "final_decision": "决策"}
+
+    _enable_engine(monkeypatch)
+    monkeypatch.setattr(az, "_run_engine_analysis", fake_engine)
+    r = az.analyze_stock("600000", with_ai=False)
+    assert "analysis_id" in r and r["analysis_id"] is None
+
+
+def test_analyze_stock_analysis_id_none_when_degraded(monkeypatch):
+    monkeypatch.setattr(az, "StockAnalysisEngine", None)
+    monkeypatch.setattr(az, "run_stock_analysis", None)
+    r = az.analyze_stock("600000", with_ai=False)
+    assert r["degraded"] is True
+    assert "analysis_id" in r and r["analysis_id"] is None

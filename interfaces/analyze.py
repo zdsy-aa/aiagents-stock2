@@ -11,6 +11,9 @@ dict)仅作引擎不可导入时的回退。
   末段,落库失败均不影响分析返回);
 - current_state/trend/chip/capital/industry/news/signals 从分析 dict 的
   agents_results / final_decision 提取,映射不到的填「未提供」(不编造);
+- analysis_id 透传引擎返回的落库记录 id(5.6 顺延裁决,5.3 遗留收口:
+  4.1 映射时丢弃;透传后 ai_trace 的 (代码, analysis_id) 去重生产可用);
+  取不到(降级/回退路径无此键)为 None;
 - scenarios 由 build_scenarios(最终结论文本) 经 DeepSeek 一次小调用生成,
   prompt 段定义于 deepseek_client.SCENARIO_PROMPT_TEMPLATE(版本
   SCENARIO_PROMPT_VERSION,与 R4-C/4.4 联动);
@@ -181,7 +184,9 @@ def build_scenarios(analysis_text):
 
 
 def analyze_stock(code, period="1y", with_ai=True):
-    """单股分析统一接口,返回 dict(键集 = interfaces.common.ANALYSIS_KEYS)。
+    """单股分析统一接口,返回 dict(键集 = interfaces.common.ANALYSIS_KEYS
+    + "analysis_id";common.ANALYSIS_KEYS 未同步加键——该常量属 Phase4 契约,
+    analysis_id 为 5.6 追加的透传键,消费方按 .get("analysis_id") 读取)。
 
     主路径 StockAnalysisEngine.run_full_analysis(headless 可用);引擎不可导入
     时回退 views.analysis_runner.run_stock_analysis(Streamlit 页面函数,成功
@@ -208,6 +213,7 @@ def analyze_stock(code, period="1y", with_ai=True):
         "name": NOT_PROVIDED,
         "period": period,
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "analysis_id": None,
         "current_state": NOT_PROVIDED,
         "trend": NOT_PROVIDED,
         "chip": NOT_PROVIDED,
@@ -255,6 +261,10 @@ def analyze_stock(code, period="1y", with_ai=True):
     if isinstance(raw, dict):
         if raw.get("success") is False:
             _degrade(f"分析失败: {raw.get('error', '未知错误')}")
+        # analysis_id 透传(5.6 顺延裁决,5.3 遗留):引擎返回的落库记录 id;
+        # 缺失/回退路径无此键时保持 None。
+        if raw.get("analysis_id") is not None:
+            result["analysis_id"] = raw["analysis_id"]
         if isinstance(raw.get("stock_info"), dict):
             stock_info = raw["stock_info"]
         if isinstance(raw.get("agents_results"), dict):
