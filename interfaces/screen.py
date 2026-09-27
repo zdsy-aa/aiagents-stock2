@@ -135,14 +135,18 @@ def _cell(v):
 
 
 def _normalize_result(df):
-    """任意 DataFrame -> SCREEN_RESULT_COLS 固定列(别名映射,缺列填空串)。"""
+    """任意 DataFrame -> SCREEN_RESULT_COLS 固定列(别名映射,缺列填空串)。
+
+    列名与 _ALIAS 零交集时五槽全为标量 "",仍按 df.index 广播构造
+    N 行 × 5 列,不会触发「all scalar values」构造异常。
+    """
     if df is None or len(df) == 0:
         return pd.DataFrame(columns=SCREEN_RESULT_COLS)
     out = {}
     for std, aliases in _ALIAS.items():
         col = next((c for c in aliases if c in df.columns), None)
         out[std] = df[col].map(_cell) if col is not None else ""
-    return pd.DataFrame(out, columns=SCREEN_RESULT_COLS)
+    return pd.DataFrame(out, index=df.index, columns=SCREEN_RESULT_COLS)
 
 
 def screen_stocks(selector, params=None, universe=None):
@@ -158,29 +162,32 @@ def screen_stocks(selector, params=None, universe=None):
 
     Raises:
         ValueError: 未知 selector。
-        RuntimeError: 选股器失败(ok=False,消息含原因)或结果为空(R4-A)。
+        RuntimeError: 选股器失败(ok=False,消息含原因)、结果为空或结果无法归一化
+            (如非 DataFrame),均按 R4-A 经 api_error 包装,消息含 selector 名,
+            __cause__ 保留原始异常。
     """
     if selector not in SELECTORS:
         raise ValueError(
             f"未知选股器: {selector!r}(可用: {'、'.join(SELECTORS)})")
     fn = SELECTORS[selector]
+    api = f"screen_stocks({selector})"
     try:
         result = fn(dict(params or {}), universe)
-    except Exception as e:
-        raise api_error("screen_stocks", e)
-    if isinstance(result, tuple):
-        if len(result) >= 3:
-            ok, df, msg = result[0], result[1], result[2]
+        if isinstance(result, tuple):
+            if len(result) >= 3:
+                ok, df, msg = result[0], result[1], result[2]
+            else:
+                ok, df = result[0], result[1]
+                msg = ""
         else:
-            ok, df = result[0], result[1]
-            msg = ""
-    else:
-        ok, df, msg = True, result, ""
-    if not ok:
-        raise api_error("screen_stocks", RuntimeError(msg or "选股器返回失败"))
-    if df is None or len(df) == 0:
-        raise api_error("screen_stocks", RuntimeError(msg or "选股结果为空"))
-    return _normalize_result(df)
+            ok, df, msg = True, result, ""
+        if not ok:
+            raise RuntimeError(msg or "选股器返回失败")
+        if df is None or len(df) == 0:
+            raise RuntimeError(msg or "选股结果为空")
+        return _normalize_result(df)
+    except Exception as e:
+        raise api_error(api, e)
 
 
 def _spec_cond_cols(spec):

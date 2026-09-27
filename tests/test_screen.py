@@ -85,6 +85,29 @@ def test_screen_stocks_failure_raises_runtime_error(monkeypatch):
         scr.screen_stocks("fake4")
 
 
+def test_screen_stocks_zero_overlap_cols_all_empty(monkeypatch):
+    # 列名与 _ALIAS 五槽零交集的 DataFrame:不抛错,返回 N 行五列全空串
+    monkeypatch.setitem(
+        scr.SELECTORS, "fake5",
+        lambda params, universe: pd.DataFrame({"abc": [1, 2], "xyz": ["a", "b"]}))
+    out = scr.screen_stocks("fake5")
+    assert list(out.columns) == SCREEN_RESULT_COLS
+    assert len(out) == 2
+    assert (out == "").all().all()
+
+
+def test_screen_stocks_non_dataframe_result_wraps_runtime_error(monkeypatch):
+    # callable 返回非 DataFrame(list):抛 RuntimeError(消息含 selector 名),
+    # 不逃逸原始 AttributeError
+    monkeypatch.setitem(
+        scr.SELECTORS, "fake6",
+        lambda params, universe: (True, ["1", "2"], "ok"))
+    with pytest.raises(RuntimeError, match="screen_stocks") as ei:
+        scr.screen_stocks("fake6")
+    assert "fake6" in str(ei.value)
+    assert isinstance(ei.value.__cause__, AttributeError)
+
+
 def test_scan_signals_name_resolves_via_build_57_specs():
     # 名称字符串走真实 build_57_specs 解析(Phase3 同源),合成面板 TQ01 命中第 1 行
     out = scr.scan_signals("TQ01", SYN_DF.copy())
