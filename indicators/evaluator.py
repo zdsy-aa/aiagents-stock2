@@ -34,7 +34,7 @@ import pandas as pd
 
 from .tdx_builtins import BUILTINS, COLUMN_ALIASES
 
-__all__ = ["evaluate_ast", "build_env"]
+__all__ = ["evaluate_ast", "build_env", "synthetic_df"]
 
 _DEFAULT_CODE_PREFIX = "600000"  # 沪深主板:CODELIKE('3')/('68') 均为假
 
@@ -191,3 +191,22 @@ def build_env(df):
         "AMOUNT": v * c / 100.0,  # 语料:成交额:=V*C/100
     }
     return env
+
+
+# ---------------------------------------------------------------------------
+# 合成行情 df(公共生成器;Task 2.4 抽取,冒烟与测试复用)
+# ---------------------------------------------------------------------------
+
+def synthetic_df(n=300):
+    """300 根合成 OHLCV(与 Task 2.2 测试 _df / registry._syn_df 同款:
+    种子随机游走 + 交易日索引)。"""
+    rng = np.random.default_rng(7)
+    idx = pd.bdate_range("2026-01-01", periods=n)
+    c = pd.Series(10.0 + np.cumsum(rng.normal(0, 0.3, n)), index=idx)
+    return pd.DataFrame({
+        "Open": c.shift(1).fillna(c.iloc[0]),
+        "High": c + 0.3,
+        "Low": c - 0.3,
+        "Close": c,
+        "Volume": pd.Series(rng.integers(1000, 2000, n), dtype=float, index=idx),
+    }, index=idx)
