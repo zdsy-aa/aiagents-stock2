@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""指标增量流水线 CLI(Task 2.4):check-new / run / run-all / smoke。
+"""指标增量流水线 CLI(Task 2.4):check-new / run / run-all / smoke / docs。
 
 子命令:
   check-new            输出「新增指标」清单(规则见 find_new_names)
   run <名称> [--code]  定位公式 → 冒烟 → 注册(partial 允许成功并标注)
   run-all [--code]     语料 32 个公式文件全部 编译+冒烟+注册(不生成文档)
   smoke <名称> [--code] 仅冒烟(合成 df 300 根,输出全 finite 且长度=n)
+  docs <名称> [--code] 生成单指标文档 docs/indicators/<名称>.md(Task 2.5)
+
+docs 语义(Task 2.5,控制器裁决):
+  registry 有该名称条目 → 直接渲染;没有 → 先自动注册(内部走 run 的注册
+  逻辑:文件 register / 内置公式手工条目)→ 再渲染;两者都失败 → 报错到
+  stderr 并 exit 1。渲染口径见 _render_doc 模块注释。
 
 公式定位顺序(控制器裁决):
   1. registry.json 条目 source(文件路径或 "builtin:名")
@@ -28,6 +34,7 @@ registry.json 写入走 indicators.registry 既有语义(同名覆盖)。
 import argparse
 import json
 import pathlib
+import re
 import sys
 from datetime import datetime
 
@@ -54,6 +61,9 @@ CORPUS_SKIP_DIR = "99_说明手册"
 CORPUS_SKIP_FILES = {"导入说明_必读.txt"}
 
 SMOKE_N = 300
+
+# 单指标文档输出目录(Task 2.5;相对仓库根,与 cwd 无关)
+DOCS_DIR = REPO_ROOT / "docs" / "indicators"
 
 
 # ---------------------------------------------------------------------------
@@ -364,13 +374,219 @@ def cmd_run_all(code_prefix="600000"):
 
 
 # ---------------------------------------------------------------------------
+# 单指标文档生成(Task 2.5)
+# ---------------------------------------------------------------------------
+# 渲染口径(控制器裁决):
+#   指标说明  = 头部注释【指标功能说明】原文要点(前 8 行);源文件无该节时
+#               依次退到【功能说明】/【指标说明】/【原理】,再无则取头部注释
+#               块原文首 8 行(分隔线不计),均无 →「待补充」;
+#   原始公式  = 源文件语句原文(parse_formula 的 raw 切片,含修饰符,直接引用
+#               源文件文本)代码块;
+#   转换逻辑  =「逐语句 AST 求值,输出 N 个序列」+ unsupported 清单(如有,
+#               逐条列出语句/类别/原因);
+#   参数说明  = registry params(空 →「固定参数:公式内嵌默认;无独立可调参数」);
+#   买入/卖出 = registry signals 按 direction 分组(buy/both 入买入,sell/both
+#               入卖出;signals 整体为空 →「本指标无标准买卖信号,输出为状态量」,
+#               单侧为空 →「本指标无标准{买入|卖出}信号,输出为状态量」);
+#   适用周期/失效条件 = 头部注释含【适用周期】/【失效条件】则引用,否则「待补充」。
+# 仅头部注释区(首个语句之前)参与节提取,正文注释不参与。
+# 文档头元信息:出处=registry source;状态=已转换(partial 时标注 unsupported
+# 条数);登记日期=registry compiled_at 的日期部分;类别按名称是否含中文给
+# 中文组合指标/英文技术指标(启发式,模板占位符的落体)。
+
+_TITLE_RE = re.compile(r"【([^】]+)】([\s\S]*?)(?=【|\})")
+_DESC_TITLES = ("指标功能说明", "功能说明", "指标说明", "原理")
+_BANNER_CHARS = set("=—-—* ")
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+
+
+def _head_parts(text):
+    """文本 → (头部注释区文本, 头部注释列表, 全量 parse 结果)。
+
+    头部注释区 = 首个解析语句所在行之前的文本(正文注释不计入)。
+    """
+    parsed = parse_formula(text)
+    stmts = parsed["statements"]
+    if not stmts:
+        head_text, head_end = text, text.count("\n") + 1
+    else:
+        head_end = stmts[0]["line"] - 1
+        head_text = "".join(text.splitlines(keepends=True)[:head_end])
+    comments = [c for c in parsed["comments"] if c["line"] <= head_end]
+    return head_text, comments, parsed
+
+
+def _title_sections(text):
+    """【标题】...到下一个【 或 } 之前的文本 → {标题: 文本}。"""
+    return {m.group(1).strip(): m.group(2) for m in _TITLE_RE.finditer(text)}
+
+
+def _clean_lines(lines, limit=None):
+    """去空行/去分隔线(==== 等)后的行列表,可截断到 limit 行。"""
+    out = []
+    for ln in lines:
+        s = ln.strip()
+        if not s or set(s) <= _BANNER_CHARS:
+            continue
+        out.append(s)
+        if limit is not None and len(out) >= limit:
+            break
+    return out
+
+
+def _description(head_text, head_comments):
+    """头部注释 → 指标说明行(【指标功能说明】等优先,兜底头部注释原文)。"""
+    secs = _title_sections(head_text)
+    for title in _DESC_TITLES:
+        if secs.get(title, "").strip():
+            return _clean_lines(secs[title].splitlines(), limit=8)
+    fallback = []
+    for c in head_comments:
+        fallback.extend(c["text"].splitlines())
+    out = _clean_lines(fallback, limit=8)
+    if len(out) > 1 and re.fullmatch(r"【[^】]+】", out[-1]):
+        out.pop()  # 截断在下一个节的标题上时去掉悬空标题
+    return out or ["待补充"]
+
+
+def _quoted_section(head_text, title):
+    """头部注释节原文(去分隔线);无该节 →「待补充」。"""
+    sec = head_text and _title_sections(head_text).get(title, "")
+    return _clean_lines(sec.splitlines()) if sec else ["待补充"]
+
+
+def _md_cell(s):
+    return str(s).replace("|", "\\|").replace("\n", " ")
+
+
+def _conversion_lines(entry):
+    outs = entry.get("outputs") or []
+    lines = [f"逐语句 AST 求值,输出 {len(outs)} 个序列"
+             f"(求值器 indicators/evaluator.py:evaluate_ast;"
+             f"函数映射见 indicators/tdx_builtins.py):", ""]
+    lines += [f"- {nm}" for nm in outs] or ["- (无)"]
+    unsup = entry.get("unsupported") or []
+    if unsup:
+        lines += ["", f"未支持语句 {len(unsup)} 条(逐语句隔离求值,已跳过并登记;"
+                      f"指标标记 partial=true):", "",
+                  "| 行 | 语句 | 类别 | 原因 |",
+                  "|----|------|------|------|"]
+        for e in unsup:
+            lines.append(f"| {e.get('line', '')} | {_md_cell(e.get('name', ''))} "
+                         f"| {_md_cell(e.get('category', ''))} "
+                         f"| {_md_cell(e.get('reason', ''))} |")
+    return lines
+
+
+def _params_lines(entry):
+    params = entry.get("params") or {}
+    if not params:
+        return ["### 固定参数", "",
+                "固定参数:公式内嵌默认;无独立可调参数", "",
+                "### 可调整参数", "",
+                "无(registry params 为空,源文件头部注释无【参数说明】节)"]
+    lines = ["### 固定参数", "", "公式内嵌默认。", "",
+             "### 可调整参数", "",
+             "| 参数 | 默认值 |", "|------|--------|"]
+    lines += [f"| {_md_cell(k)} | {v} |" for k, v in params.items()]
+    return lines
+
+
+def _signal_lines(entry, want, label):
+    sigs = entry.get("signals") or []
+    if not sigs:
+        return ["本指标无标准买卖信号,输出为状态量"]
+    hits = [s for s in sigs if s.get("direction") in want]
+    if not hits:
+        return [f"本指标无标准{label}信号,输出为状态量"]
+    lines = [f"registry signals 中 direction ∈ {{{', '.join(want)}}} 的输出"
+             f"({len(hits)} 个):", ""]
+    lines += [f"- {s.get('name')}(direction={s.get('direction')})" for s in hits]
+    return lines
+
+
+def _render_doc(name, entry, loc):
+    """registry 条目 + 源文件 → 文档文本(小节顺序遵循 docs/indicator_template.md)。"""
+    text = loc["text"] if loc else None
+    if text:
+        head_text, head_comments, parsed = _head_parts(text)
+        raws = [st["raw"] for st in parsed["statements"]]
+    else:
+        head_text, head_comments, raws = "", [], []
+    source = str(entry.get("source") or "(未知)")
+    unsup = entry.get("unsupported") or []
+    date = (entry.get("compiled_at") or "")[:10] or \
+        datetime.now().strftime("%Y-%m-%d")
+    kind = "中文组合指标" if _CJK_RE.search(name) else "英文技术指标"
+    status = "已转换" + (f"(partial:unsupported {len(unsup)} 条)" if unsup
+                         else "")
+
+    out = [f"# {name}", "",
+           f"- 类别:{kind}",
+           f"- 出处:{source}",
+           f"- 状态:{status}",
+           f"- 登记日期:{date}", "",
+           "## 指标说明", ""]
+    out += _description(head_text, head_comments)
+    out += ["", "## 原始公式", ""]
+    if raws:
+        out += ["```"] + raws + ["```"]
+    else:
+        out.append("待补充(源文件未定位)")
+    out += ["", "## 转换逻辑", ""] + _conversion_lines(entry)
+    out += ["", "## 参数说明", ""] + _params_lines(entry)
+    out += ["", "## 买入信号", ""] + _signal_lines(entry, ("buy", "both"), "买入")
+    out += ["", "## 卖出信号", ""] + _signal_lines(entry, ("sell", "both"), "卖出")
+    out += ["", "## 适用周期", ""] + _quoted_section(head_text, "适用周期")
+    out += ["", "## 失效条件", ""] + _quoted_section(head_text, "失效条件")
+    return "\n".join(out) + "\n"
+
+
+def cmd_docs(name, code_prefix="600000"):
+    """生成 docs/indicators/<名称>.md。
+
+    registry 有该名称条目 → 直接渲染;没有 → 先自动注册(内部走 cmd_run 的
+    注册逻辑:文件 register / 内置公式手工条目)再渲染;注册或渲染失败 →
+    报错到 stderr 并 exit 1。
+    """
+    entry = load_registry().get(name)
+    if entry is None:
+        print(f"[docs] registry 无 {name!r} 条目 → 先自动注册(run 逻辑)")
+        if cmd_run(name, code_prefix) != 0:
+            print(f"[docs] {name!r} 自动注册失败,无法生成文档(exit 1)",
+                  file=sys.stderr)
+            return 1
+        reg = load_registry()
+        entry = reg.get(name)
+        if entry is None:  # 定位文件 stem 与名称不一致时按 stem 取
+            loc = _locate(name)
+            stem = loc["path"].stem if loc and loc.get("path") else None
+            entry = reg.get(stem) if stem else None
+        if entry is None:
+            print(f"[docs] {name!r} 注册成功但 registry 查无对应条目,"
+                  f"无法生成文档(exit 1)", file=sys.stderr)
+            return 1
+    loc = _locate(name)
+    if loc is None:
+        print(f"[docs] 警告:未定位到源文件,原始公式/指标说明小节将标注待补充",
+              file=sys.stderr)
+    out_path = DOCS_DIR / f"{name}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(_render_doc(name, entry, loc), encoding="utf-8")
+    print(f"[docs] {name}: 已生成 {out_path}(outputs "
+          f"{len(entry.get('outputs') or [])} 个,partial="
+          f"{bool(entry.get('partial'))})")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CLI 入口
 # ---------------------------------------------------------------------------
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="indicator_pipeline",
-        description="指标增量流水线 CLI(check-new / run / run-all / smoke)")
+        description="指标增量流水线 CLI(check-new / run / run-all / smoke / docs)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("check-new", help="输出「新增指标」清单(add_new.txt∪"
@@ -390,6 +606,12 @@ def main(argv=None):
     p_smoke.add_argument("name")
     p_smoke.add_argument("--code", default="600000")
 
+    p_docs = sub.add_parser("docs", help="生成单指标文档 docs/indicators/"
+                                         "<名称>.md(registry 无条目时先自动"
+                                         "注册再生成)")
+    p_docs.add_argument("name")
+    p_docs.add_argument("--code", default="600000")
+
     args = parser.parse_args(argv)
     if args.cmd == "check-new":
         return cmd_check_new()
@@ -399,6 +621,8 @@ def main(argv=None):
         return cmd_run_all(args.code)
     if args.cmd == "smoke":
         return cmd_smoke(args.name, args.code)
+    if args.cmd == "docs":
+        return cmd_docs(args.name, args.code)
     parser.error(f"未知子命令 {args.cmd!r}")
 
 
