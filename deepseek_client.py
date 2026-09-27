@@ -158,3 +158,30 @@ class DeepSeekClient:
         except Exception as e:
             logger.error(f"Failed to parse final decision JSON: {e}")
             return {"decision_text": response}
+
+
+# =====================================================================
+# Phase4 Task4.1: 综合结论情景模板(A上涨/B震荡/C下跌, R4-B)
+# 独立常量,不改既有 prompt;版本号供 R4-C / Task4.4 的 PROMPT_VERSIONS 汇总。
+# =====================================================================
+SCENARIO_PROMPT_VERSION = "v1"
+
+SCENARIO_PROMPT_TEMPLATE = """基于下面的最终投资决策文本,为这只股票设计三种交易情景。
+只输出一个 JSON 对象,不要输出任何解释、前后缀或 markdown 代码块,格式如下:
+
+{{"scenarios": [
+  {{"name": "上涨", "trigger": "...", "confirm": "...", "target": "...", "invalidate": "..."}},
+  {{"name": "震荡", "trigger": "...", "observe": "...", "invalidate": "..."}},
+  {{"name": "下跌", "trigger": "...", "risk": "...", "end": "...", "invalidate": "..."}}
+]}}
+
+字段要求:
+- 上涨情景: trigger=触发条件, confirm=确认条件, target=目标价位, invalidate=失效条件;
+- 震荡情景: trigger=触发条件, observe=观察要点, invalidate=失效条件;
+- 下跌情景: trigger=触发条件, risk=风险要点, end=下跌目标位, invalidate=失效条件;
+- 三个情景的 trigger 与 invalidate 均必填且不能为空;
+- 字段值使用简洁中文,不要编造决策文本中不存在的数据。
+
+【最终决策文本】
+{analysis_text}
+"""
