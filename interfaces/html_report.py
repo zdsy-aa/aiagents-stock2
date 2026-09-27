@@ -4,8 +4,9 @@
 gen_report(kind, payload, out_dir=None) -> str(HTML 文件路径)
 
 - kind ∈ {"analysis", "candidates", "backtest"},其他抛 ValueError(R4-A 输入非法);
-  payload 必须为 dict,否则抛 ValueError。文件名 `{kind}_报告_<ts>.html`
-  (ts = %Y%m%d_%H%M%S),out_dir 缺省用仓库根 report/(不存在则创建)。
+  payload 必须为 dict,否则抛 ValueError。文件名 `{kind}_报告_<ts>_<ms>.html`
+  (ts = %Y%m%d_%H%M%S,ms = 3 位毫秒,防同秒覆盖,P5-2),out_dir 缺省用仓库根
+  report/(不存在则创建)。
 - 样式参考项目 ui_theme 配色(冷灰底 #f0f2f5、白底卡片、浅灰边框、圆角、
   表格斑马纹、涨红跌绿),全部内联于单文件 <style>,无外链资源,双击即开。
 - 三种模板:
@@ -211,9 +212,10 @@ def gen_report(kind, payload, out_dir=None):
     out = Path(out_dir) if out_dir else DEFAULT_REPORT_DIR
     out.mkdir(parents=True, exist_ok=True)
     ts = time.strftime("%Y%m%d_%H%M%S")
+    ms = f"{int(time.time() * 1000) % 1000:03d}"   # P5-2:同秒不覆盖
     ts_full = time.strftime("%Y-%m-%d %H:%M:%S")
     title = payload.get("title") or _default_title(kind, payload)
     doc = _page(title, _RENDERERS[kind](payload), ts_full)
-    path = out / f"{kind}_报告_{ts}.html"
+    path = out / f"{kind}_报告_{ts}_{ms}.html"
     path.write_text(doc, encoding="utf-8")
     return str(path)

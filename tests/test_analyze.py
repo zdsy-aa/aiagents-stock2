@@ -26,8 +26,14 @@ def _enable_engine(monkeypatch):
 def test_analyze_stock_degraded_on_ai_failure(monkeypatch):
     def fake_engine(symbol, period):
         return {"agents_results": {}, "discussion_result": "讨论", "final_decision": "决策"}
+
+    def scenario_boom(*a, **k):
+        # P5-3:防带 key 宿主真实调用情景 LLM(无 key 环境原样走失败降级路径)
+        raise RuntimeError("网络超时(测试桩)")
+
     _enable_engine(monkeypatch)
     monkeypatch.setattr(az, "_run_engine_analysis", fake_engine)
+    monkeypatch.setattr(az, "_call_scenario_llm", scenario_boom)
     r = az.analyze_stock("600000")
     assert r["degraded"] is True            # 无 AI(monkeypatch 下 client 不可用)仍返回结构
     for k in ANALYSIS_KEYS:
