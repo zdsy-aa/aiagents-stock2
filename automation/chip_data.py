@@ -23,11 +23,11 @@ NotImplementedError 并附指引。东财解封后改 ``_DECISION`` 的 source �
 """
 from __future__ import annotations
 
-import concurrent.futures
 import json
 import logging
 import os
 import sqlite3
+import threading
 import urllib.request
 from datetime import datetime
 
@@ -134,13 +134,29 @@ def fetch_chip(code: str, adjust: str = "") -> dict:
 # 实时探测(复评用;akshare/东财两项会发网络请求,勿在单测中断言其结果)
 # ---------------------------------------------------------------------------
 def _run_with_timeout(fn, timeout_s: float):
-    """线程池执行 fn,超时返回 TimeoutError。"""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(fn)
+    """daemon 线程执行 fn,超时后立即返回 TimeoutError,不等待线程收尾。
+
+    不用 ThreadPoolExecutor:with 退出会走 shutdown(wait=True),worker 若
+    卡在无超时的网络调用(如 akshare 内部 requests.get 不带 timeout)上,
+    调用方会无限期阻塞,「防挂死」失效。daemon 线程 + join(timeout) 保证
+    调用方总能按时拿到结果;挂死的残留线程随进程退出回收。
+    """
+    holder: dict = {}
+
+    def _worker():
         try:
-            return future.result(timeout=timeout_s)
-        except concurrent.futures.TimeoutError:
-            return TimeoutError(f"探测超时(>{timeout_s}s)")
+            holder["value"] = fn()
+        except Exception as e:  # noqa: BLE001 —— 异常由调用方按探测结果处理
+            holder["error"] = e
+
+    worker = threading.Thread(target=_worker, daemon=True, name=f"chip-probe-{id(fn)}")
+    worker.start()
+    worker.join(timeout=timeout_s)
+    if worker.is_alive():
+        return TimeoutError(f"探测超时(>{timeout_s}s)")
+    if "error" in holder:
+        return holder["error"]
+    return holder.get("value")
 
 
 def probe_akshare(timeout_s: float = 30.0) -> dict:

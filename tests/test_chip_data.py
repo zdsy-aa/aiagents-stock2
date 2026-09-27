@@ -71,3 +71,23 @@ def test_probe_helpers_exist():
     assert callable(cd.probe_akshare)
     assert callable(cd.probe_em_http)
     assert callable(cd.probe_tdx_file)
+
+
+def test_run_with_timeout_returns_on_hang():
+    """超时包装在底层调用挂死时必须按时返回,而不是等待线程收尾(审查修复)。"""
+    import time
+
+    def slow_probe():
+        time.sleep(120)
+        return "never"
+
+    t0 = time.monotonic()
+    result = cd._run_with_timeout(slow_probe, timeout_s=0.3)
+    elapsed = time.monotonic() - t0
+    assert elapsed < 2.0
+    assert isinstance(result, TimeoutError)
+    assert "超时" in str(result)
+
+
+def test_run_with_timeout_passes_value():
+    assert cd._run_with_timeout(lambda: "ok", timeout_s=5.0) == "ok"
