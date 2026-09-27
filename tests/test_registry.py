@@ -12,11 +12,15 @@
   (买/卖兼具按 sell 优先)。
 - 写类测试用 backup_restore fixture 快照/还原 registry.json,保证测试后
   仓库内文件不变。
+- 人工修正走 registry_overrides.json(load_registry 合并);注册流程不写该
+  文件,重注册不覆盖修正。
 """
+import json
 import pathlib
 
 import pytest
 
+import indicators.registry as registry_mod
 from indicators.registry import compile_indicator, load_registry, register
 
 CORE = ("/home/tdxback/通达信指标/20260424001/tdx_v4_standalone/"
@@ -178,16 +182,75 @@ def test_signals_direction_synthetic(tmp_path):
 # ---------------------------------------------------------------- 注册表文件
 
 def test_load_registry_shape():
-    """初始 registry.json 两条目结构与部分注册字段(控制器验收)。"""
+    """registry.json 条目结构与部分注册字段(控制器验收,含 builtin 条目)。"""
     reg = load_registry()
-    assert "核心_基础V3" in reg and "六脉神剑V5" in reg
+    assert "核心_基础V3" in reg and "六脉神剑V5" in reg and "MACD" in reg
     for name, entry in reg.items():
         assert set(entry) == _ENTRY_KEYS, name
-        assert pathlib.Path(entry["source"]).name == name + ".txt", name
-        assert isinstance(entry["outputs"], list)
-        assert all(set(s) == {"name", "direction"} for s in entry["signals"])
-        assert isinstance(entry["partial"], bool)
-        assert isinstance(entry["unsupported"], list)
+        assert isinstance(entry["source"], str), name
+        if not entry["source"].startswith("builtin:"):
+            # builtin 条目 source="builtin:名" 无 .txt 文件,跳过后缀检查
+            assert pathlib.Path(entry["source"]).name == name + ".txt", name
+        assert isinstance(entry["outputs"], list), name
+        assert all(set(s) == {"name", "direction"} for s in entry["signals"]), name
+        assert isinstance(entry["params"], dict), name
+        assert isinstance(entry["compiled_at"], str), name
+        assert isinstance(entry["partial"], bool), name
+        assert isinstance(entry["unsupported"], list), name
     assert reg["核心_基础V3"]["partial"] is True
     assert len(reg["核心_基础V3"]["unsupported"]) == 5
     assert reg["六脉神剑V5"]["partial"] is False
+
+
+def test_load_registry_builtin_macd_entry():
+    """builtin 条目(MACD)七键形状(控制器验收):source=builtin:MACD、
+    outputs 含 DIFF/DEA/MACD、partial=false。"""
+    entry = load_registry()["MACD"]
+    assert set(entry) == _ENTRY_KEYS
+    assert entry["source"] == "builtin:MACD"
+    assert entry["outputs"] == ["DIFF", "DEA", "MACD"]
+    assert entry["signals"] == []
+    assert entry["params"] == {}
+    assert entry["unsupported"] == []
+    assert entry["partial"] is False
+
+
+# ---------------------------------------------------------------- 人工修正
+
+def test_overrides_survive_register(tmp_path, monkeypatch):
+    """人工修正(registry_overrides.json)不被注册流程静默覆盖(控制器裁决)。
+
+    临时 registry.json + 临时 overrides(沿 tmp_registry 隔离方式):
+    写 overrides 把 六脉6红首发 direction 改为 sell、params 键级合并
+    (快线周期=9)→ load_registry 生效;再 register(六脉神剑V5) 整条重建
+    entry → load_registry 仍为 sell/params 仍在,且 overrides 文件未被写。
+    """
+    reg = tmp_path / "registry.json"
+    monkeypatch.setattr(registry_mod, "REGISTRY_PATH", reg)
+    ov = tmp_path / "registry_overrides.json"
+    monkeypatch.setattr(registry_mod, "OVERRIDES_PATH", ov)
+
+    assert register(LIUMAI) is True          # 先注册出机器值(buy、params={})
+    sig = {s["name"]: s["direction"]
+           for s in load_registry()["六脉神剑V5"]["signals"]}
+    assert sig["六脉6红首发"] == "buy"
+
+    ov.write_text(json.dumps({
+        "六脉神剑V5": {
+            "signals": [{"name": "六脉6红首发", "direction": "sell"}],
+            "params": {"快线周期": 9},
+        },
+    }, ensure_ascii=False), encoding="utf-8")
+    ov_before = ov.read_text(encoding="utf-8")
+
+    entry = load_registry()["六脉神剑V5"]
+    assert {s["name"]: s["direction"] for s in entry["signals"]
+            }["六脉6红首发"] == "sell"
+    assert entry["params"] == {"快线周期": 9}
+
+    assert register(LIUMAI) is True          # 重注册整条重建 entry
+    entry = load_registry()["六脉神剑V5"]
+    assert {s["name"]: s["direction"] for s in entry["signals"]
+            }["六脉6红首发"] == "sell"        # 人工修正仍在
+    assert entry["params"] == {"快线周期": 9}
+    assert ov.read_text(encoding="utf-8") == ov_before   # register 不写 overrides

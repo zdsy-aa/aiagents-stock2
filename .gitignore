@@ -48,3 +48,6 @@ data/chanlun_history/
 !.aider.conf.yml
 data/commonality_reports/
 .superpowers/
+
+# 指标文档生成产物（docs/indicators/，不入库）
+docs/indicators/

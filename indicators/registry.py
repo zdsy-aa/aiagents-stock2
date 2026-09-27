@@ -20,9 +20,16 @@ r"""指标编译与注册表(Task 2.3)。
 信号标准化:输出名含「买/卖/首发」或头部注释【输出】节声明(声明名须为实际
 输出)→ signals 条目 {name, direction: buy|sell|both}。direction 启发式
 (控制器裁决):含「卖」→sell;含「买」或「首发」→buy;其余→both(买/卖
-兼具按 sell 优先,与裁决列举顺序一致);人工可在 registry.json 修正。
+兼具按 sell 优先,与裁决列举顺序一致)。
 【输出】节匹配 `【输出[^】]*】`(含【输出(对其他指标保持兼容)】变体),
 不含【对外输出】。
+
+人工修正(终审裁决):registry_overrides.json 与 entry 的 signals/params 同构,
+格式 {名称: {signals: [{name, direction}], params: {...}}},只允许覆盖这两
+个字段。load_registry 每次加载 registry.json 后按名称合并:signals 按 name
+匹配覆盖 direction(不增删信号),params 键级合并(override 优先);未知名称/
+信号名与非法结构忽略。register/run/run-all/_write_builtin_entry 等注册流程
+绝不写该文件,重注册不再覆盖人工修正。
 
 params:头部注释【参数说明】节正则提取「参数名: ... 默认 N」(简报正则
 `参数名:.*?默认?(\\d+)` 的落体);提取不到给空 dict——不臆造。语料当前无
@@ -46,6 +53,7 @@ from .tdx_parser import parse_formula
 __all__ = ["compile_indicator", "register", "load_registry"]
 
 REGISTRY_PATH = pathlib.Path(__file__).with_name("registry.json")
+OVERRIDES_PATH = pathlib.Path(__file__).with_name("registry_overrides.json")
 
 _BUY_SELL_MARKERS = ("买", "卖", "首发")
 
@@ -112,7 +120,8 @@ def _direction(name):
 def _extract_signals(outputs, declared):
     """signals = (输出名含 买/卖/首发)∪(头部【输出】节声明且为实际输出)。
 
-    按 outputs 顺序去重输出 {name, direction};人工可在 registry.json 修正。"""
+    按 outputs 顺序去重输出 {name, direction};人工修正走
+    registry_overrides.json(load_registry 时合并,见模块头)。"""
     declared_names = set(_ID_RE.findall(declared or ""))
     signals = []
     for nm in outputs:
@@ -208,20 +217,61 @@ def register(txt_path, code_prefix="600000"):
 
 
 def _write_entry(name, entry):
-    reg = load_registry()
+    """整条重建 entry 并写回 registry.json(机器值,不经 overrides 合并,
+    避免把人工修正烘焙进 registry.json)。"""
+    reg = _read_registry_raw()
     reg[name] = entry
     REGISTRY_PATH.write_text(
         json.dumps(reg, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8")
 
 
+def _read_registry_raw():
+    if not REGISTRY_PATH.exists():
+        return {}
+    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+
+
+def _load_overrides():
+    """读 registry_overrides.json;文件不存在返回 {}(初始为 {} 即无修正)。"""
+    if not OVERRIDES_PATH.exists():
+        return {}
+    return json.loads(OVERRIDES_PATH.read_text(encoding="utf-8"))
+
+
+def _apply_overrides(reg, overrides):
+    """把 registry_overrides.json 的人工修正并入加载结果(原地修改 reg):
+
+    - signals 按 name 匹配覆盖 direction,不增删信号;
+    - params 键级合并(override 优先);
+    - 只覆盖 signals/params 两字段;未知名称、未知信号名与非法结构忽略
+      (overrides 是人工编辑文件,不打断流水线)。
+    """
+    for name, ov in overrides.items():
+        entry = reg.get(name)
+        if not isinstance(entry, dict) or not isinstance(ov, dict):
+            continue
+        signals = ov.get("signals")
+        if isinstance(signals, list):
+            sig_map = {s["name"]: s for s in entry.get("signals", [])}
+            for s in signals:
+                if isinstance(s, dict) and "direction" in s \
+                        and s.get("name") in sig_map:
+                    sig_map[s["name"]]["direction"] = s["direction"]
+        params = ov.get("params")
+        if isinstance(params, dict):
+            merged = dict(entry.get("params", {}))
+            merged.update(params)
+            entry["params"] = merged
+    return reg
+
+
 def load_registry():
     """读 registry.json → {名称: {source, outputs, signals, params, compiled_at,
-    unsupported, partial}}。
+    unsupported, partial}},并合并 registry_overrides.json 的人工修正
+    (signals direction 按 name 覆盖、params 键级合并,override 优先)。
 
     文件不存在返回 {}(供流水线首跑/check-new 比对);
     JSON 损坏则抛 JSONDecodeError(真实问题应暴露)。
     """
-    if not REGISTRY_PATH.exists():
-        return {}
-    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    return _apply_overrides(_read_registry_raw(), _load_overrides())
