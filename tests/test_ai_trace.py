@@ -142,6 +142,62 @@ def test_comparison_table_panel_failure_wraps_runtime_error(monkeypatch):
         raise AssertionError("面板加载失败应包装为 RuntimeError(R4-A)")
 
 
+# ---------- (代码, analysis_id) 去重(Task5.3 收口:P5-1 双记录) ----------
+
+def _empty_panels(monkeypatch):
+    cols = ["股票代码", "信号日期", "是否盈利"]
+    monkeypatch.setattr(at, "load_panel", lambda: pd.DataFrame(columns=cols))
+    monkeypatch.setattr(at, "load_confirm_panel",
+                        lambda **kw: pd.DataFrame(columns=cols))
+
+
+def test_comparison_table_dedup_analysis_id_versioned_preferred(tmp_path, monkeypatch):
+    """P5-1 双记录收口:引擎原始记录 + 任务版本化记录(同 analysis_id)只出
+    一条,版本化记录优先;同 analysis_id 多条版本化(重跑)只留最新一条。"""
+    db = StockAnalysisDatabase(db_path=str(tmp_path / "dedup.db"))
+    monkeypatch.setattr(at, "get_db", lambda: db)
+    raw_id = db.save_analysis("600519", "贵州茅台", "1y", {}, {}, "讨论",
+                              {"rating": "中性"})                      # 引擎原始记录
+    at.trace_save("600519", "贵州茅台", "1y", {}, {}, "讨论", {"rating": "买入"},
+                  prompt_version="v1", model_version="deepseek-chat",
+                  input_snapshot={"source": "automation", "analysis_id": raw_id})
+    at.trace_save("600519", "贵州茅台", "1y", {}, {}, "讨论", {"rating": "买入"},
+                  prompt_version="v1", model_version="deepseek-chat",
+                  input_snapshot={"source": "automation", "analysis_id": raw_id})  # 重跑
+    db.save_analysis("000001", "平安银行", "1y", {}, {}, "讨论",
+                     {"rating": "观望"})                                # 老记录
+    _empty_panels(monkeypatch)
+    df = at.comparison_table()
+    assert len(df) == 2            # 600519 组一条(版本化);000001 老记录保持原行为
+    row = df[df["代码"] == "600519"].iloc[0]
+    assert row["AI方向"] == "多"    # 版本化记录取代引擎原始记录(中性 -> 多)
+
+
+def test_comparison_table_versioned_without_raw_kept(tmp_path, monkeypatch):
+    """版本化记录引用的 analysis_id 无对应原始记录时,该版本化记录照常出现。"""
+    db = StockAnalysisDatabase(db_path=str(tmp_path / "orphan.db"))
+    monkeypatch.setattr(at, "get_db", lambda: db)
+    at.trace_save("600519", "贵州茅台", "1y", {}, {}, "讨论", {"rating": "买入"},
+                  prompt_version="v1",
+                  input_snapshot={"source": "automation", "analysis_id": 9999})
+    _empty_panels(monkeypatch)
+    df = at.comparison_table()
+    assert len(df) == 1 and df.iloc[0]["代码"] == "600519"
+
+
+def test_comparison_table_records_without_ids_unchanged(monkeypatch):
+    """无 id 且无 analysis_id 的记录(老数据/测试桩)不参与去重,保持原行为。"""
+    monkeypatch.setattr(at, "_load_analysis_records", lambda: [
+        {"symbol": "600519", "analysis_date": "2026-09-01 09:30:00",
+         "final_decision": "看多"},
+        {"symbol": "600519", "analysis_date": "2026-09-01 10:00:00",
+         "final_decision": "看空"},
+    ])
+    _empty_panels(monkeypatch)
+    df = at.comparison_table()
+    assert len(df) == 2            # 同代码无身份键的两条记录都保留
+
+
 # ---------- database 迁移 + trace_save(临时库) ----------
 
 LEGACY_SCHEMA = """

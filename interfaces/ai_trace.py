@@ -8,6 +8,8 @@
   对每条记录按 (代码, 分析日期 + N 天) 在买点事件面板 load_panel(优先)
   与确认面板 load_confirm_panel(次选)匹配「是否盈利」标签;两个面板都没有
   该键的行标「无数据」。输出列:代码/分析日期/AI方向/{N}天后是否盈利...
+  记录先按 (代码, analysis_id) 去重,版本化记录优先(P5-1 双记录收口,
+  Task5.3;无 analysis_id 的老记录保持原行为)。
 - trace_save(...):包装 database.save_analysis,透传 prompt_version /
   model_version / input_snapshot 版本字段(默认空,旧调用兼容),返回新记录 id。
 
@@ -95,7 +97,8 @@ def _norm_date(x):
 # ---------- 数据源(独立函数,便于测试 monkeypatch) ----------
 
 def _load_analysis_records():
-    """读全部已保存分析记录 -> [{symbol, analysis_date, final_decision}]。
+    """读全部已保存分析记录 -> [{id, symbol, analysis_date, final_decision,
+    input_snapshot}](id/input_snapshot 供 (代码, analysis_id) 去重,Task5.3 收口)。
 
     经 database 既有接口:get_all_records(取 id)+ get_record_by_id(取明细)。
     """
@@ -106,9 +109,11 @@ def _load_analysis_records():
         if not detail:
             continue
         records.append({
+            "id": detail.get("id"),
             "symbol": detail.get("symbol", ""),
             "analysis_date": detail.get("analysis_date", ""),
             "final_decision": detail.get("final_decision", {}),
+            "input_snapshot": detail.get("input_snapshot", {}),
         })
     return records
 
@@ -159,6 +164,89 @@ def _lookup_confirm(confirm_df, pending):
     return found
 
 
+# ---------- (代码, analysis_id) 去重(Task5.3 收口,回应 P5-1 双记录) ----------
+
+def _snapshot_dict(input_snapshot):
+    """input_snapshot -> dict;dict 原样、JSON 文本解析、其余空 dict(不抛错)。"""
+    if isinstance(input_snapshot, dict):
+        return input_snapshot
+    if isinstance(input_snapshot, str) and input_snapshot.strip():
+        try:
+            parsed = json.loads(input_snapshot)
+        except (ValueError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _analysis_id_of(rec):
+    """记录 input_snapshot 里的 analysis_id -> 非空字符串;无 -> None。"""
+    value = _snapshot_dict(rec.get("input_snapshot")).get("analysis_id")
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    return str(value).strip()
+
+
+def _record_identity(rec):
+    """记录身份键 (norm_code, identity) -> 供 (代码, analysis_id) 去重。
+
+    identity = input_snapshot.analysis_id(版本化记录);缺省取记录自身 id——
+    引擎落库记录的 id 与版本化记录引用的 analysis_id 同命名空间(AUTOINCREMENT
+    主键),据此把「引擎原始记录 + 任务版本化记录」归入同组。id 与 analysis_id
+    皆无的记录不参与去重(保持原行为)。
+    """
+    code = _norm_code(rec.get("symbol"))
+    identity = _analysis_id_of(rec)
+    if identity is None:
+        rid = rec.get("id")
+        if rid is None:
+            return None
+        identity = str(rid)
+    return (code, identity)
+
+
+def _is_versioned(rec):
+    """是否版本化记录:input_snapshot 含非空 analysis_id。"""
+    return _analysis_id_of(rec) is not None
+
+
+def _dedupe_records(records):
+    """按 (代码, analysis_id) 去重:版本化记录优先;同组多条版本化留最新(id 大)。
+
+    规则(控制器裁决,P5-1 双记录收口):
+    - 无身份键的记录(无 id 且无 analysis_id 的老记录)保持原行为,不去重;
+    - 同组内版本化记录取代非版本化记录(引擎原始记录被其版本化孪生取代);
+    - 同组多条版本化记录(重跑)只留 id 最大的一条。
+    输出保持原记录顺序(只删行,不重排)。
+    """
+    chosen = {}
+    for rec in records:
+        key = _record_identity(rec)
+        if key is None:
+            continue
+        cur = chosen.get(key)
+        if cur is None:
+            chosen[key] = rec
+            continue
+        new_v, cur_v = _is_versioned(rec), _is_versioned(cur)
+        if new_v and not cur_v:
+            chosen[key] = rec
+        elif new_v and cur_v and (rec.get("id") or -1) > (cur.get("id") or -1):
+            chosen[key] = rec
+        # 新记录非版本化:保留组内既有者(版本化优先;都非版本化时先到先得)
+    seen, out = set(), []
+    for rec in records:
+        key = _record_identity(rec)
+        if key is None:
+            out.append(rec)
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(chosen[key])
+    return out
+
+
 # ---------- 对外接口 ----------
 
 def comparison_table(symbol=None, days=(1, 3, 5, 10)):
@@ -172,6 +260,8 @@ def comparison_table(symbol=None, days=(1, 3, 5, 10)):
         DataFrame,列 = 代码/分析日期/AI方向/{N}天后是否盈利...(按 days 顺序)。
         「{N}天后是否盈利」取面板中 (代码, 分析日期+N天) 行的 是否盈利 标签,
         面板两处均无该键标「无数据」。记录为空时返回仅含表头的空表。
+        记录先按 (代码, analysis_id) 去重(版本化记录优先,见 _dedupe_records,
+        Task5.3 收口);无 analysis_id 的老记录保持原行为。
     """
     if isinstance(days, (int, float)):
         days = (int(days),)
@@ -187,6 +277,7 @@ def comparison_table(symbol=None, days=(1, 3, 5, 10)):
     if symbol:
         target = _norm_code(symbol)
         records = [r for r in records if _norm_code(r.get("symbol")) == target]
+    records = _dedupe_records(records)
     if not records:
         return pd.DataFrame(columns=columns)
 
