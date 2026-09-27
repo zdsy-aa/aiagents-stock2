@@ -10,6 +10,7 @@ import json
 import pathlib
 
 import pandas as pd
+import pytest
 
 import backtest.report as rep
 import backtest.versioning as ver
@@ -56,6 +57,66 @@ def test_bump_version_nonfinite_backtest_values(tmp_path, monkeypatch):
     hist = ver.param_history("TQ01")
     assert hist[0]["backtest"]["profit_loss_ratio"] is None
     assert hist[0]["backtest"]["ret_std"] is None
+
+
+def test_corrupted_versions_file_raises(tmp_path, monkeypatch):
+    """损坏 JSON:load 抛 RuntimeError(消息含路径)且文件内容不变。"""
+    p = tmp_path / "strategy_versions.json"
+    p.write_text("{ not valid json", encoding="utf-8")
+    monkeypatch.setattr(ver, "VERSIONS_PATH", p)
+    with pytest.raises(RuntimeError, match="strategy_versions.json"):
+        ver.param_history("TQ01")
+    assert p.read_text(encoding="utf-8") == "{ not valid json"
+
+
+def test_non_dict_versions_file_raises(tmp_path, monkeypatch):
+    """顶层非 dict(合法 JSON):同样抛 RuntimeError,不静默当 {}。"""
+    p = tmp_path / "strategy_versions.json"
+    p.write_text("[1, 2, 3]", encoding="utf-8")
+    monkeypatch.setattr(ver, "VERSIONS_PATH", p)
+    with pytest.raises(RuntimeError, match="strategy_versions.json"):
+        ver.bump_version("TQ01", {"a": 1}, {"win_rate": 0.5})
+    assert p.read_text(encoding="utf-8") == "[1, 2, 3]"
+
+
+def test_bump_version_preserves_corrupted_file(tmp_path, monkeypatch):
+    """损坏时 bump 不覆盖:抛 RuntimeError,原文件内容不变。"""
+    p = tmp_path / "strategy_versions.json"
+    p.write_text("{ corrupted", encoding="utf-8")
+    monkeypatch.setattr(ver, "VERSIONS_PATH", p)
+    with pytest.raises(RuntimeError, match="strategy_versions.json"):
+        ver.bump_version("TQ01", {"a": 1}, {"win_rate": 0.5})
+    assert p.read_text(encoding="utf-8") == "{ corrupted"
+
+
+def test_bump_version_atomic_on_write_failure(tmp_path, monkeypatch):
+    """写盘中断(模拟磁盘满):原文件保持完整合法 JSON(先写 tmp 再 replace)。"""
+    p = tmp_path / "strategy_versions.json"
+    monkeypatch.setattr(ver, "VERSIONS_PATH", p)
+    ver.bump_version("TQ01", {"a": 1}, {"win_rate": 0.5})
+    before = p.read_text(encoding="utf-8")
+
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(ver.json, "dump", boom)
+    with pytest.raises(OSError, match="disk full"):
+        ver.bump_version("TQ01", {"a": 2}, {"win_rate": 0.6})
+    # 原文件未被破坏,仍是合法 JSON 且历史完整
+    assert p.read_text(encoding="utf-8") == before
+    data = json.loads(before)
+    assert [v["params"] for v in data["TQ01"]["versions"]] == [{"a": 1}]
+
+
+def test_bump_version_valid_json_no_tmp_leftover(tmp_path, monkeypatch):
+    """正常 bump 后:文件为合法 JSON、历史完整、无 tmp 残留。"""
+    p = tmp_path / "strategy_versions.json"
+    monkeypatch.setattr(ver, "VERSIONS_PATH", p)
+    ver.bump_version("TQ01", {"a": 1}, {"win_rate": 0.5})
+    ver.bump_version("TQ01", {"a": 2}, {"win_rate": 0.6})
+    assert not (tmp_path / ".strategy_versions.json.tmp").exists()
+    data = json.loads(p.read_text(encoding="utf-8"))
+    assert [v["params"] for v in data["TQ01"]["versions"]] == [{"a": 1}, {"a": 2}]
+    assert [v["version"] for v in data["TQ01"]["versions"]] == ["V1", "V2"]
 
 
 # ---------------------------------------------------------------------------
