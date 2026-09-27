@@ -4,7 +4,11 @@ import time
 import logging
 import re
 from typing import Dict, List, Any, Optional
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ImportError:  # 测试通道(如 venv-data)无 openai:模块级常量仍可导入,仅实例化不可用
+    OpenAI = None
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +19,8 @@ class APICallError(Exception):
 class DeepSeekClient:
     def __init__(self, api_key=None, base_url=None, model=None):
         # P0 整改三: 统一从 config.py 读取默认值，避免 /v1 缺失
+        if OpenAI is None:
+            raise ImportError("openai 未安装，无法实例化 DeepSeekClient(模块级常量仍可导入)")
         import config
         self.api_key = api_key or config.DEEPSEEK_API_KEY
         self.base_url = base_url or config.DEEPSEEK_BASE_URL
@@ -185,3 +191,17 @@ SCENARIO_PROMPT_TEMPLATE = """基于下面的最终投资决策文本,为这只�
 【最终决策文本】
 {analysis_text}
 """
+
+
+# =====================================================================
+# Phase4 Task4.4: prompt 模板版本汇总(R4-C 落库 prompt_version 字段用)。
+# 既有五个模板从未做过版本管理,如实标「未版本化」;4.1 的情景模板已带版本号。
+# =====================================================================
+PROMPT_VERSIONS = {
+    "technical_analysis": "未版本化",
+    "fundamental_analysis": "未版本化",
+    "fund_flow_analysis": "未版本化",
+    "comprehensive_discussion": "未版本化",
+    "final_decision": "未版本化",
+    "SCENARIO_PROMPT_TEMPLATE": SCENARIO_PROMPT_VERSION,
+}
