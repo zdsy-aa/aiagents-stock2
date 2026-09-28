@@ -8,6 +8,9 @@
   + 17 连续列 + 标签),Top50 JSON 的胜率/支持挖掘底座(mine_confirm.py),Task 3.2
   对齐验收数据基座。confirm_panel_v2.npz(v2=True)多含 y_dn 下跌标签与见顶/见底日
   列,tq_confirm_top10.py 文件头 TQ51~57 涨跌占比的挖掘底座(mine_combo11.py)。
+- load_confirm_panel_v2():v2 面板(15,125,987 行)Y 六列全量解包,列名
+  buy_label/ext_up/sell_label/ext_dn/win_days/dn_days,Task S1 卖出镜像
+  挖掘底座。
 """
 import functools
 
@@ -63,25 +66,12 @@ def _y_dn_column(Y, v2):
 
 
 @functools.lru_cache(maxsize=1)
-def load_confirm_panel(limit=None, v2=False):
-    """读确认面板 -> pd.DataFrame(可复现:固定 npz,确定性解包,无随机)。
+def _unpack_confirm(limit, v2):
+    """确认面板(v1/v2)解包核心:按 Y[:,0] 标签有效性切片后,解包位压缩列 /
+    连续列 / 日期 / 股票代码。返回 (cols dict, Y 有效切片 float32)。
 
-    - 行空间 = 全A 4426 股 × 任意日K时点(15,115,796 行;v2: 15,125,987 行,
-      比 v1 多 2026-09-03~07 的 5 个交易日、少部分 1990 早期行,行集不同)。
-    - B 位压缩:uint8 (n,21),packbits(bitorder='little'),21×8=168 位对应
-      bool_cols 列名;解包用 np.unpackbits 逐字节向量化(非 Python 循环),
-      列名 = bool_cols[k](k=0..167),位序实测与 mine_confirm 的
-      `P[:, k//8] & (1 << (k%8))` 提取一致(Top50 支持数完全对齐验证)。
-    - C 连续列保留 float32(含 NaN)。
-    - Y: v1 = [是否盈利, 区间涨跌幅](y_up=未来20日最高/收盘-1>=10%,
-      ext_up=最高/收盘-1);v2 增 [是否下跌(y_dn=未来20日最低/收盘-1<=-10%),
-      最大跌幅, 见顶日, 见底日],仅 y_dn 以「是否下跌」列载入。
-      标签 NaN(每股末尾 20 根无前视窗口的 bar)整行剔除 —— 与 mine_confirm 的
-      m_valid 口径一致(支持数对齐的前提)。
-    - dates = 距 1970-01-01 天数(int64),转「信号日期」YYYYMMDD(int32)与「年」(int16);
-      切分口径:年 <= 2024 训练、>= 2025 测试(等价 mine 的 dates < 20089)。
-    - limit: 冒烟参数,只取前 N 行(原始行序)后再剔 NaN 标签行,仅测试用。
-    - 解包时间实测 ~60s(15M 行,机器相关);进程内 lru_cache(maxsize=1) 缓存。
+    位序、标签剔除、年切分口径与 load_confirm_panel 完全一致(见其 docstring);
+    标签列如何载入由调用方决定(v1/v2 命名差异)。
     """
     path = CONFIRM_V2_PATH if v2 else CONFIRM_PATH
     d = np.load(path, mmap_mode="r", allow_pickle=True)
@@ -116,13 +106,58 @@ def load_confirm_panel(limit=None, v2=False):
             cols[bool_cols[k]] = bits[:, b]
     for i, name in enumerate(cont_cols):
         cols[name] = C[:, i]
+    cols["信号日期"] = ymd
+    cols["年"] = year
+    cols["股票代码"] = pd.Categorical.from_codes(sid, codes.astype(str))
+    return cols, Y
+
+
+@functools.lru_cache(maxsize=1)
+def load_confirm_panel(limit=None, v2=False):
+    """读确认面板 -> pd.DataFrame(可复现:固定 npz,确定性解包,无随机)。
+
+    - 行空间 = 全A 4426 股 × 任意日K时点(15,115,796 行;v2: 15,125,987 行,
+      比 v1 多 2026-09-03~07 的 5 个交易日、少部分 1990 早期行,行集不同)。
+    - B 位压缩:uint8 (n,21),packbits(bitorder='little'),21×8=168 位对应
+      bool_cols 列名;解包用 np.unpackbits 逐字节向量化(非 Python 循环),
+      列名 = bool_cols[k](k=0..167),位序实测与 mine_confirm 的
+      `P[:, k//8] & (1 << (k%8))` 提取一致(Top50 支持数完全对齐验证)。
+    - C 连续列保留 float32(含 NaN)。
+    - Y: v1 = [是否盈利, 区间涨跌幅](y_up=未来20日最高/收盘-1>=10%,
+      ext_up=最高/收盘-1);v2 增 [是否下跌(y_dn=未来20日最低/收盘-1<=-10%),
+      最大跌幅, 见顶日, 见底日],仅 y_dn 以「是否下跌」列载入。
+      标签 NaN(每股末尾 20 根无前视窗口的 bar)整行剔除 —— 与 mine_confirm 的
+      m_valid 口径一致(支持数对齐的前提)。
+    - dates = 距 1970-01-01 天数(int64),转「信号日期」YYYYMMDD(int32)与「年」(int16);
+      切分口径:年 <= 2024 训练、>= 2025 测试(等价 mine 的 dates < 20089)。
+    - limit: 冒烟参数,只取前 N 行(原始行序)后再剔 NaN 标签行,仅测试用。
+    - 解包时间实测 ~60s(15M 行,机器相关);进程内 lru_cache(maxsize=1) 缓存。
+    """
+    cols, Y = _unpack_confirm(limit, v2)
     cols[LABEL_COL] = Y[:, 0].astype(np.float64)
     cols[RET_COL] = Y[:, 1].astype(np.float64)
     dn = _y_dn_column(Y, v2)
     if dn is not None:
         cols[DOWN_LABEL_COL] = dn
-    cols["信号日期"] = ymd
-    cols["年"] = year
-    cols["股票代码"] = pd.Categorical.from_codes(sid, codes.astype(str))
-    df = pd.DataFrame(cols)
-    return df
+    return pd.DataFrame(cols)
+
+
+# v2 面板 Y 六列语义(confirm_panel.py:Y = [y_up, ext_up, y_dn, ext_dn, peak_day, trough_day])
+V2_Y_COLS = ("buy_label", "ext_up", "sell_label", "ext_dn", "win_days", "dn_days")
+
+
+@functools.lru_cache(maxsize=1)
+def load_confirm_panel_v2(limit=None):
+    """读 v2 确认面板(15,125,987 行),Y 六列全量解包,列名与 Y 列序一一对应:
+
+    buy_label / ext_up / sell_label / ext_dn / win_days / dn_days
+    = y_up    / ext_up / y_dn(未来20日最低/收盘-1 <= -10%)/ ext_dn / 见顶日 / 见底日
+
+    与 load_confirm_panel(v2=True) 的差异:后者仅载入 Y[:,2] 为「是否下跌」
+    (TQ51~57 对齐用);本函数载入完整六列(Task S1 卖出镜像挖掘底座)。
+    位解包 / 标签 NaN 剔除 / 年切分(≤2024 训练、≥2025 测试)口径与 v1 一致。
+    """
+    cols, Y = _unpack_confirm(limit, True)
+    for i, name in enumerate(V2_Y_COLS):
+        cols[name] = Y[:, i].astype(np.float64)
+    return pd.DataFrame(cols)
