@@ -12,6 +12,12 @@
 - watch(notify_on_change=True): 跑一次扫描 + diff,有变化时 print 摘要
   并把当前扫描写回快照(变动自动更新:基线前进),无变化完全静默。
 
+已知盲区(2026-09-28 终审记录):仓库根 /home/tdxback/aiagents-stock 在快照中为
+顶层大目录(大目录=True,无「展开条目」),只以聚合 size_mb 参与 diff,对项目内
+文件级变动不敏感——本仓库 ≈23.5GB(size_mb 23543.309),需聚合体积变动超 5%
+(≈1.2GB)才触发 changed;项目内新增/删除脚本、改文档等小改动不会告警。建议后续
+为仓库增顶层扫描基线(展开到子目录/文件级),以提高变动检测灵敏度。
+
 只依赖标准库 + automation.home_scan。
 """
 from __future__ import annotations
