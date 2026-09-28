@@ -39,7 +39,7 @@
 - 收盘后任务链：`python -m automation.cli --phase post_market`（另支持 pre_market / intraday / all；失败任务自动邮件告警）。
 - 指标转换：`scripts/indicator_pipeline.py run MACD`（子命令 check-new / run / run-all / smoke / docs）。
 - 57 信号对齐验收：`tests/test_alignment_57.py`。
-- 回测报告：`report/回测报告_57信号_20260927_123206.md`（57 信号整表）。
+- 回测报告：`report/回测报告_57信号_*.md`（57 信号整表，文件名带生成时间戳）。
 
 ## 运行方式
 
