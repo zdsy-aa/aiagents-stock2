@@ -905,8 +905,10 @@ def display_mindmap():
 
 - [ ] **Step 5: 重建镜像并容器内验证通过**
 
-Run: `cd /home/tdxback/aiagents-stock && docker compose build agentsstock && docker compose up -d agentsstock1 && docker exec agentsstock1 python3 -m pytest tests/test_ui_pages_smoke.py -v`
+Run: `cd /home/tdxback/aiagents-stock && docker compose build agentsstock && docker compose up -d agentsstock && docker exec agentsstock1 python3 -m pytest tests/test_ui_pages_smoke.py -v`
 Expected: 构建成功;容器 healthy(约 1-2 分钟);smoke 全部 PASS(含 test_mindmap_page_renders)
+
+注(实测发现):镜像内无 pytest(requirements.txt 未含)。若 `No module named pytest`,先在运行容器内临时 `docker exec agentsstock1 pip install pytest` 再跑;是否把 pytest 进 requirements.txt 属独立决策,不在本任务范围(已裁决,任务提交不含此改动)。
 
 - [ ] **Step 6: 提交**
 
@@ -981,7 +983,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - [ ] **Step 1: 确认容器状态**
 
 Run: `cd /home/tdxback/aiagents-stock && docker compose ps`
-Expected: agentsstock1 healthy(Task 5 Step 5 已重建镜像;若此前未执行重建,先跑 `docker compose build agentsstock && docker compose up -d agentsstock1`)
+Expected: agentsstock1 healthy(Task 5 Step 5 已重建镜像;若此前未执行重建,先跑 `docker compose build agentsstock && docker compose up -d agentsstock`;服务名 agentsstock,容器名 agentsstock1)
 
 - [ ] **Step 2: 宿主机侧生成器全量测试**
 
