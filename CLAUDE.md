@@ -21,6 +21,7 @@
   - `backtest/` 统一回测：engine.py / combo_engine.py / dataio.py / param_test.py / failure_db.py / signal_specs.py / versioning.py / report.py
   - `interfaces/` 统一接口：ai_trace.py / analyze.py / backtest_api.py / bridge.py / common.py / html_report.py / screen.py
   - `automation/` 自动化与风控：cli.py / jobs.py / notify.py / alert.py / chip_data.py / market_env.py / risk_filter.py / signal_tracking.py / home_scan.py / asset_watch.py
+- **`tools/`** 运维脚本:`mindmap_generator.py`(项目思维导图:宿主 cron 每分钟快照检测重建,产物 `data/mindmap/`,页面 `mindmap_ui.py` 60s 刷新)。
 - **`views/`** 页面路由与视图（10 个）；顶层 `*.py` 主应用与各策略模块（123 个，20 页面路由）。
 - **数据网关**：`akshare_gateway.py`、`data_source_manager.py`。
 - **`tdx-api/`**（Go 本地行情 API 服务）、**`pg_warehouse/`**（PostgreSQL 数仓同步）。

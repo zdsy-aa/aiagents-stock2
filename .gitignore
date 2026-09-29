@@ -37,6 +37,9 @@ __pycache__/
 # 运行期数据库（bind-mount，不入库）
 data/*.db
 
+# 思维导图产物(宿主机 cron 生成,不入库)
+data/mindmap/
+
 # PostgreSQL 数据卷（不入库）
 pgdata/
 
