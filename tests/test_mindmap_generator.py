@@ -71,14 +71,6 @@ def test_write_outputs_and_run_produce_artifacts(tmp_path):
     assert meta2["generated_at"] and meta2["node_count"] >= 1
 
 
-def test_scan_tree_excludes_nested_superpowers(tmp_path):
-    root = make_repo(tmp_path)
-    (root / "docs" / "superpowers" / "specs" / "x.md").mkdir(parents=True)
-    tree = mg.scan_tree(root)
-    names = {c["name"] for c in tree["children"]}
-    assert "docs" not in names  # docs 下只有被排除的 superpowers,整目录无收录文件
-
-
 def test_scan_tree_excludes_superpowers_path_with_file(tmp_path):
     """superpowers 目录内存在真实收录文件时,相对路径排除仍生效。"""
     root = make_repo(tmp_path)
@@ -94,3 +86,25 @@ def test_run_errors_return_error_line(tmp_path, monkeypatch):
     monkeypatch.setattr(mg, "scan_tree", boom)
     result = mg.run(tmp_path, tmp_path / "out", annot_path=tmp_path / "nope.json")
     assert result.startswith("error:")
+
+
+def test_snapshot_diff_and_rebuild_on_change(tmp_path):
+    root = make_repo(tmp_path)
+    out_dir = tmp_path / "out"
+    no_annot = root / "nope.json"  # 不存在的注解路径,隔离真实注解文件
+    # 第一轮:重建
+    assert mg.run(root, out_dir, annot_path=no_annot).startswith("rebuilt")
+    md_mtime_1 = (out_dir / "project_map.md").stat().st_mtime
+    snapshot = json.loads((out_dir / ".snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["paths"]
+    # 第二轮:无变化 → unchanged,产物 mtime 不变
+    assert mg.run(root, out_dir, annot_path=no_annot) == "unchanged"
+    assert (out_dir / "project_map.md").stat().st_mtime == md_mtime_1
+    # 第三轮:改一个文件 → 重建,changed_files 含该文件
+    (root / "app.py").write_text("print('changed')")
+    time.sleep(0.05)  # 保证 mtime 变化
+    assert mg.run(root, out_dir, annot_path=no_annot).startswith("rebuilt")
+    meta = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
+    assert "app.py" in meta["changed_files"]
+    # 第四轮:force 参数无条件重建
+    assert mg.run(root, out_dir, force=True, annot_path=no_annot).startswith("rebuilt")

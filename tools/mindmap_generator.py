@@ -88,10 +88,66 @@ def write_outputs(out_dir: Path, md: str, meta: dict) -> None:
     _atomic_write(out_dir / "meta.json", json.dumps(meta, ensure_ascii=False, indent=2))
 
 
+def _exclude_out_dir(tree: dict, root: Path, out_dir: Path) -> None:
+    """把产物目录从树中移除:产物不得回流成输入,否则快照永不稳定(out_dir 位于 root 内时)。"""
+    try:
+        rel_out = out_dir.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        node["children"] = [c for c in node.get("children", []) if c["path"] != rel_out]
+        stack.extend(c for c in node["children"] if c["type"] == "dir")
+
+
+def build_snapshot(root: Path, tree: dict) -> dict:
+    """只跟踪 file 节点:relpath -> [mtime, size]。目录增删由文件路径体现。"""
+    paths = {}
+
+    def collect(node):
+        if node["type"] == "file":
+            try:
+                st = (root / node["path"]).stat()
+                paths[node["path"]] = [int(st.st_mtime), st.st_size]
+            except OSError:
+                pass
+        for c in node.get("children", []):
+            collect(c)
+
+    collect(tree)
+    return {"paths": paths, "generated_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+
+
+def diff_snapshot(old: dict, new: dict) -> list[str]:
+    old_paths = old.get("paths", {})
+    new_paths = new.get("paths", {})
+    changed = []
+    for p, meta in new_paths.items():
+        if p not in old_paths or old_paths[p] != meta:
+            changed.append(p)
+    for p in old_paths:
+        if p not in new_paths:
+            changed.append(p)
+    return sorted(changed)
+
+
 def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None = None) -> str:
-    """执行一轮:扫描→(Task 2: 快照对比;Task 3: 注解合并)→重建。返回日志行。"""
+    """执行一轮:扫描→快照对比→(Task 3: 注解合并)→重建。返回日志行。"""
     try:
         tree = scan_tree(root)
+        _exclude_out_dir(tree, root, out_dir)
+        new_snapshot = build_snapshot(root, tree)
+        old_snapshot = {}
+        snapshot_path = out_dir / ".snapshot.json"
+        if snapshot_path.exists():
+            try:
+                old_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                old_snapshot = {}
+        changed = diff_snapshot(old_snapshot, new_snapshot)
+        if not force and old_snapshot.get("paths") and not changed:
+            return "unchanged"
         md = render_markdown(tree)
         try:
             git_head = subprocess.run(
@@ -102,11 +158,12 @@ def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None 
         meta = {
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "node_count": count_nodes(tree),
-            "changed_files": [],
+            "changed_files": changed,
             "git_head": git_head,
         }
         write_outputs(out_dir, md, meta)
-        return "rebuilt"
+        _atomic_write(snapshot_path, json.dumps(new_snapshot, ensure_ascii=False, indent=2))
+        return f"rebuilt ({len(changed)} changed)"
     except Exception as e:
         return f"error: {e!r}"
 
