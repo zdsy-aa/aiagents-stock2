@@ -108,3 +108,42 @@ def test_snapshot_diff_and_rebuild_on_change(tmp_path):
     assert "app.py" in meta["changed_files"]
     # 第四轮:force 参数无条件重建
     assert mg.run(root, out_dir, force=True, annot_path=no_annot).startswith("rebuilt")
+
+
+def _write_annotations(root: Path) -> Path:
+    annot = root / "mindmap_annotations.json"
+    annot.write_text(json.dumps({
+        "files": {"app.py": "入口文件"},
+        "groups": {"我的模块": ["app.py", "不存在的.py"]},
+    }, ensure_ascii=False), encoding="utf-8")
+    return annot
+
+
+def test_annotations_merge_notes_and_groups(tmp_path):
+    root = make_repo(tmp_path)
+    annot = _write_annotations(root)
+    out_dir = tmp_path / "out"
+    result = mg.run(root, out_dir, annot_path=annot)
+    assert result.startswith("rebuilt")
+    md = (out_dir / "project_map.md").read_text(encoding="utf-8")
+    assert "# 我的模块" in md
+    assert "app.py — 入口文件" in md
+    assert "不存在的.py" not in md  # 分组成员缺失 → 跳过
+    assert "警告: 分组成员不存在: 我的模块 -> 不存在的.py" in result  # 警告并入日志行,不阻塞
+
+
+def test_annotations_invalid_json_falls_back(tmp_path):
+    root = make_repo(tmp_path)
+    annot = root / "mindmap_annotations.json"
+    annot.write_text("{not json", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    result = mg.run(root, out_dir, annot_path=annot)
+    assert result.startswith("rebuilt")  # 注解失败不阻塞结构生成
+    md = (out_dir / "project_map.md").read_text(encoding="utf-8")
+    assert "app.py" in md
+
+
+def test_annotations_file_missing_ok(tmp_path):
+    out_dir = tmp_path / "out"
+    result = mg.run(tmp_path, out_dir, annot_path=tmp_path / "nope.json")
+    assert result.startswith("rebuilt")

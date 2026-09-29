@@ -132,6 +132,67 @@ def diff_snapshot(old: dict, new: dict) -> list[str]:
     return sorted(changed)
 
 
+def load_annotations(annot_path: Path):
+    """返回 (file_notes, groups, errors)。注解文件缺失/损坏不抛异常。"""
+    if annot_path is None or not annot_path.exists():
+        return {}, {}, []
+    try:
+        data = json.loads(annot_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return {}, {}, [f"注解解析失败: {e!r}"]
+    if not isinstance(data, dict):
+        return {}, {}, ["注解根必须是 JSON 对象"]
+    file_notes, groups, errors = {}, {}, []
+    raw_files = data.get("files", {})
+    if not isinstance(raw_files, dict):
+        errors.append("files 区必须是对象")
+        raw_files = {}
+    for path, note in raw_files.items():
+        if isinstance(path, str) and isinstance(note, str):
+            file_notes[path] = note
+    raw_groups = data.get("groups", {})
+    if not isinstance(raw_groups, dict):
+        errors.append("groups 区必须是对象")
+        raw_groups = {}
+    for name, members in raw_groups.items():
+        if isinstance(name, str) and isinstance(members, list) and all(isinstance(m, str) for m in members):
+            groups[name] = members
+    return file_notes, groups, errors
+
+
+def apply_annotations(tree: dict, file_notes: dict, groups: dict):
+    """文件注解写 node['note'];groups 把根级文件归入分组节点。返回 (tree, warnings)。"""
+    warnings = []
+
+    def walk(node):
+        if node["type"] == "file" and node["path"] in file_notes:
+            node["note"] = file_notes[node["path"]]
+        for c in node.get("children", []):
+            walk(c)
+
+    walk(tree)
+    by_path = {c["path"]: c for c in tree["children"] if c["type"] == "file"}
+    group_nodes = []
+    for gname, members in groups.items():
+        group_children = []
+        for m in members:
+            node = by_path.pop(m, None)
+            if node is None:
+                warnings.append(f"分组成员不存在: {gname} -> {m}")
+            else:
+                group_children.append(node)
+        if group_children:
+            group_nodes.append({
+                "name": gname, "path": f"__group__:{gname}",
+                "type": "group", "children": group_children,
+            })
+    tree["children"] = [
+        c for c in tree["children"] if c["type"] != "file" or c["path"] in by_path
+    ] + group_nodes
+    tree["children"].sort(key=lambda n: (n["type"] != "dir", n["name"].lower()))
+    return tree, warnings
+
+
 def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None = None) -> str:
     """执行一轮:扫描→快照对比→(Task 3: 注解合并)→重建。返回日志行。"""
     try:
@@ -148,6 +209,9 @@ def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None 
         changed = diff_snapshot(old_snapshot, new_snapshot)
         if not force and old_snapshot.get("paths") and not changed:
             return "unchanged"
+        annot_path = annot_path or DEFAULT_ANNOT_PATH
+        file_notes, groups, ann_errors = load_annotations(annot_path)
+        tree, ann_warnings = apply_annotations(tree, file_notes, groups)
         md = render_markdown(tree)
         try:
             git_head = subprocess.run(
@@ -163,7 +227,8 @@ def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None 
         }
         write_outputs(out_dir, md, meta)
         _atomic_write(snapshot_path, json.dumps(new_snapshot, ensure_ascii=False, indent=2))
-        return f"rebuilt ({len(changed)} changed)"
+        detail = "; ".join([f"注解错误: {e}" for e in ann_errors] + [f"警告: {w}" for w in ann_warnings])
+        return f"rebuilt ({len(changed)} changed)" + (f" | {detail}" if detail else "")
     except Exception as e:
         return f"error: {e!r}"
 
