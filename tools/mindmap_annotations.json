@@ -1,0 +1,109 @@
+{
+  "files": {
+    "app.py": "Streamlit 入口:主题注入→导航→路由分派",
+    "akshare_gateway.py": "数据网关核心:五级降级链+熔断+限流+缓存",
+    "data_source_manager.py": "业务侧数据门面(历史K线/财务/实时)",
+    "database.py": "StockAnalysisDatabase(分析结果 JSON 存储)",
+    "base_db.py": "SQLite 连接工厂(WAL/busy_timeout)",
+    "base_scheduler.py": "后台线程调度基类",
+    "config.py": "环境配置读取",
+    "config_manager.py": "配置 UI 读写 .env",
+    "deepseek_client.py": "OpenAI SDK 封装(超时/退避/各分析师 prompt)",
+    "ai_agents.py": "5 分析师并行+首席汇总",
+    "model_config.py": "17 个预置模型",
+    "stock_analysis_engine.py": "个股东分析引擎(经 analysis_runner 统一入口)",
+    "strategy_catalog.py": "全部策略清单的事实来源",
+    "notification_service.py": "通知统一出口(邮件/Webhook/钉钉/飞书)",
+    "logger_config.py": "日志配置(print→logger)",
+    "ui_theme.py": "页面主题注入",
+    "run.py": "应用启动脚本",
+    "ds.sh": "启动/重启容器脚本",
+    "ds_auto.sh": "容器自动化脚本",
+    "look_log.sh": "日志查看脚本",
+    "install_stock_cn.sh": "国内源依赖安装脚本",
+    "install_stock_local.sh": "本地依赖安装脚本",
+    "views/nav_model.py": "导航单一数据源 NAV(5 大类)",
+    "views/page_router.py": "路由:show_* 标志分派",
+    "views/analysis_runner.py": "个股东分析统一函数(禁直接调 ai_agents)",
+    "indicators/registry.py": "指标注册表(partial/unsupported 语义)",
+    "backtest/engine.py": "统一回测引擎",
+    "interfaces/analyze.py": "统一分析接口",
+    "automation/cli.py": "收盘后任务链入口 post_market",
+    "pg_warehouse/sync_daily.py": "每日增量同步 PG(按 max(id)/TRUNCATE)",
+    "tdx-api/README.md": "Go 通达信行情服务说明",
+    "docs/项目记忆.md": "项目全貌文档(架构/模块/坑/速查)",
+    "CLAUDE.md": "项目规则(分支策略/结构/约定)"
+  },
+  "groups": {
+    "缠论选股": [
+      "chanlun_engine.py", "chanlun_batch.py", "chanlun_selector.py",
+      "chanlun_universe.py", "chanlun_signal_db.py", "chanlun_single.py",
+      "chanlun_ui.py", "chanlun_chart_ui.py", "chanlun_schedule.sh"
+    ],
+    "六脉神剑": [
+      "liumai_engine.py", "liumai_batch.py", "liumai_selector.py",
+      "liumai_signal_db.py", "liumai_ui.py"
+    ],
+    "缠论×六脉组合": [
+      "combo_batch.py", "combo_selector.py", "combo_signal_db.py", "combo_ui.py"
+    ],
+    "起涨预测": [
+      "qizhang_batch.py", "qizhang_picks_db.py", "qizhang_predict_ui.py", "qizhang_schedule.sh"
+    ],
+    "新闻流量监测": [
+      "news_fetch.py", "news_flow_agents.py", "news_flow_alert.py",
+      "news_flow_data.py", "news_flow_db.py", "news_flow_engine.py",
+      "news_flow_model.py", "news_flow_pdf.py", "news_flow_scheduler.py",
+      "news_flow_sentiment.py", "news_flow_ui.py", "news_announcement_data.py",
+      "qstock_news_data.py"
+    ],
+    "智策板块": [
+      "sector_strategy_agents.py", "sector_strategy_data.py", "sector_strategy_db.py",
+      "sector_strategy_engine.py", "sector_strategy_pdf.py", "sector_strategy_scheduler.py",
+      "sector_strategy_ui.py"
+    ],
+    "智瞰龙虎": [
+      "longhubang_agents.py", "longhubang_data.py", "longhubang_db.py",
+      "longhubang_engine.py", "longhubang_pdf.py", "longhubang_scoring.py",
+      "longhubang_ui.py"
+    ],
+    "主力选股": [
+      "main_force_analysis.py", "main_force_batch_db.py", "main_force_history_ui.py",
+      "main_force_pdf_generator.py", "main_force_selector.py", "main_force_ui.py"
+    ],
+    "智能盯盘": [
+      "smart_monitor_data.py", "smart_monitor_db.py", "smart_monitor_deepseek.py",
+      "smart_monitor_engine.py", "smart_monitor_kline.py", "smart_monitor_qmt.py",
+      "smart_monitor_tdx_data.py", "smart_monitor_ui.py", "miniqmt_interface.py",
+      "monitor_db.py", "monitor_manager.py", "monitor_scheduler.py",
+      "monitor_service.py", "monitor_ui.py"
+    ],
+    "持仓分析": [
+      "portfolio_db.py", "portfolio_manager.py", "portfolio_scheduler.py", "portfolio_ui.py"
+    ],
+    "宏观分析": [
+      "macro_analysis_agents.py", "macro_analysis_data.py", "macro_analysis_engine.py",
+      "macro_analysis_ui.py"
+    ],
+    "宏观周期": [
+      "macro_cycle_agents.py", "macro_cycle_data.py", "macro_cycle_engine.py",
+      "macro_cycle_pdf.py", "macro_cycle_ui.py"
+    ],
+    "产业链": [
+      "industry_chain_data.py", "industry_chain_ui.py"
+    ],
+    "低价擒牛": [
+      "low_price_bull_monitor.py", "low_price_bull_monitor_ui.py", "low_price_bull_selector.py",
+      "low_price_bull_service.py", "low_price_bull_strategy.py", "low_price_bull_ui.py"
+    ],
+    "小市值": ["small_cap_selector.py", "small_cap_ui.py"],
+    "净利增长": ["profit_growth_monitor.py", "profit_growth_selector.py", "profit_growth_ui.py"],
+    "价值选股": ["value_stock_selector.py", "value_stock_strategy.py", "value_stock_ui.py"],
+    "稳定选股": ["stable_ui.py"],
+    "基础数据与网关": [
+      "fund_flow_akshare.py", "risk_data_fetcher.py", "quarterly_report_data.py",
+      "market_sentiment_data.py", "stock_data.py", "update_env_example.py",
+      "pdf_generator.py", "current_strategy_ui.py", "sector_detail_ui.py"
+    ]
+  }
+}

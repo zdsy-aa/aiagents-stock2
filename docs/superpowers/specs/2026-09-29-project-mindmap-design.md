@@ -12,7 +12,7 @@
 |---|---|
 | 展示载体 | Streamlit 新增页面(文档大类),入口 8503 |
 | 实时更新机制 | 宿主机 crontab 每分钟跑生成器,快照对比,有变更才重建 |
-| 导图内容 | 自动扫描目录树 + `tools/mindmap_annotations.yaml` 手工注解合并 |
+| 导图内容 | 自动扫描目录树 + `tools/mindmap_annotations.json` 手工注解合并 |
 | 渲染形式 | markmap 经典脑图(CDN 加载 JS,浏览器侧) |
 
 **否决的备选**:常驻 watchdog 进程(需保活,维护成本高);容器内生成(容器只挂载 `./data`、`./.env`、`./tdx-data:ro`,看不到宿主机根目录代码,需改部署拓扑)。
@@ -24,7 +24,7 @@
 | 组件 | 位置 | 入库 | 职责 |
 |---|---|---|---|
 | `tools/mindmap_generator.py` | 仓库 tools/ | 是 | 纯 stdlib;扫描→快照对比→重建→注解合并→原子写产物 |
-| `tools/mindmap_annotations.yaml` | 仓库 tools/ | 是 | 手工维护的关键模块/策略注解(初版按 docs/项目记忆.md 模块清单生成) |
+| `tools/mindmap_annotations.json` | 仓库 tools/ | 是 | 手工维护的关键模块/策略注解(初版按 docs/项目记忆.md 模块清单生成) |
 | crontab 条目 | 宿主机 crontab | 否 | `* * * * * /home/tdxback/venv-data/bin/python /home/tdxback/aiagents-stock/tools/mindmap_generator.py` |
 | `mindmap_ui.py` | 仓库根目录 | 是 | `display_mindmap()`:读产物 → markmap 渲染 + 元信息 + 定时刷新 |
 | `views/nav_model.py` / `views/page_router.py` | views/ | 是 | 文档大类加「🧠 项目思维导图」`show_mindmap` 条目与路由分支 |
@@ -51,17 +51,18 @@
 - 收录文件类型:`.py`、`.md`、`.sh`、`.yml`、`.yaml`、`.json`、`Dockerfile`、`.txt`、`.js`、`.go`。
 - 导图骨架 = 物理目录树;注解可把相关文件挂到「逻辑分组」节点下(见 3.4)。
 
-### 3.4 注解合并(`tools/mindmap_annotations.yaml`)
+### 3.4 注解合并(`tools/mindmap_annotations.json`)
 
-```yaml
-# 结构:相对路径(文件或目录) → 说明文字;说明渲染为该节点文本的后缀
-chanlun_engine.py: "缠论引擎(简化缠论:分型→笔→线段→中枢→MACD背驰)"
-views/page_router.py: "页面路由(show_* 标志分派)"
+```json
+{"files": {"chanlun_engine.py": "缠论引擎(简化缠论:分型→笔→线段→中枢→MACD背驰)"},
+ "groups": {"缠论选股": ["chanlun_engine.py", "chanlun_batch.py"]}}
 ```
+
+格式为 JSON 而非 yaml:保持生成器纯 stdlib(宿主 venv-data 无 PyYAML)。
 
 - 文件注解:节点文本 = `文件名 — 说明`。
 - 目录/虚拟分组注解:允许为目录节点加说明;允许 `__groups__` 区把零散顶层文件归入逻辑分组(如 `缠论*` → 「缠论选股」),分组节点渲染为导图分支。
-- 注解路径在仓库中不存在时:跳过并记入 sync.log,不影响整体生成。
+- 注解文件不存在时:静默跳过(可选配置缺失不是错误),不影响整体生成。
 
 ### 3.5 产物格式
 
@@ -88,7 +89,7 @@ views/page_router.py: "页面路由(show_* 标志分派)"
 |---|---|
 | 产物不存在(首分钟) | 页面提示等待,不报错 |
 | 生成器异常 | 写 sync.log;产物不动(原子写保证旧产物始终可用) |
-| 注解 yaml 格式错 | 跳过注解,结构照常生成 |
+| 注解 JSON 格式错 | 跳过注解,结构照常生成 |
 | 仓库外 git 不可用 | git_head 记空串,不失败 |
 | markmap CDN 加载失败 | 页面内提示文字 |
 
@@ -99,12 +100,12 @@ views/page_router.py: "页面路由(show_* 标志分派)"
   2. 注解合并(文件注解/虚拟分组)正确;
   3. 快照对比:无变更不重建(产物 mtime 不变)、有变更重建且 changed_files 正确;
   4. 原子写:产物始终是完整旧版或完整新版;
-  5. 注解 yaml 非法时仍产出结构。
+  5. 注解 JSON 非法时仍产出结构。
 - 修改 `tests/test_ui_pages_smoke.py`:`PAGE_FLAGS` 加 `show_mindmap`,验证产物缺失时页面渲染不抛异常。
 
 ## 5. 部署与文档
 
-1. `tools/mindmap_generator.py`、`tools/mindmap_annotations.yaml`、`mindmap_ui.py`、nav/router/tests 改动提交 git(仅任务产物,推送由用户执行)。
+1. `tools/mindmap_generator.py`、`tools/mindmap_annotations.json`、`mindmap_ui.py`、nav/router/tests 改动提交 git(仅任务产物,推送由用户执行)。
 2. 宿主机 crontab 加第 5 条(加前给用户看)。
 3. `.gitignore` 补 `data/mindmap/`。
 4. 根目录新页面按项目惯例重建镜像:`docker compose build agentsstock && docker compose up -d agentsstock1`。
