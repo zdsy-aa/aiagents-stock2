@@ -88,6 +88,20 @@ def test_run_errors_return_error_line(tmp_path, monkeypatch):
     assert result.startswith("error:")
 
 
+def test_annotations_note_on_directory(tmp_path):
+    """files 区写目录路径时,目录节点也渲染说明(注解扩容需要)。"""
+    root = make_repo(tmp_path)
+    annot = root / "mindmap_annotations.json"
+    annot.write_text(json.dumps(
+        {"files": {"views": "页面与视图目录"}, "groups": {}}, ensure_ascii=False),
+        encoding="utf-8")
+    out_dir = tmp_path / "out"
+    result = mg.run(root, out_dir, annot_path=annot)
+    assert result.startswith("rebuilt")
+    md = (out_dir / "project_map.md").read_text(encoding="utf-8")
+    assert "views — 页面与视图目录" in md
+
+
 def test_snapshot_diff_and_rebuild_on_change(tmp_path):
     root = make_repo(tmp_path)
     out_dir = tmp_path / "out"

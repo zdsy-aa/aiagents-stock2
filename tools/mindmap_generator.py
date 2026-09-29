@@ -161,11 +161,11 @@ def load_annotations(annot_path: Path):
 
 
 def apply_annotations(tree: dict, file_notes: dict, groups: dict):
-    """文件注解写 node['note'];groups 把根级文件归入分组节点。返回 (tree, warnings)。"""
+    """文件/目录注解写 node['note'];groups 把根级文件归入分组节点。返回 (tree, warnings)。"""
     warnings = []
 
     def walk(node):
-        if node["type"] == "file" and node["path"] in file_notes:
+        if node["type"] in ("file", "dir") and node["path"] in file_notes:
             node["note"] = file_notes[node["path"]]
         for c in node.get("children", []):
             walk(c)

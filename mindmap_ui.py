@@ -17,7 +17,7 @@ _MARKMAP_TEMPLATE = """<!DOCTYPE html>
 <style>
   html, body {{ margin: 0; padding: 6px 10px; height: 100%; background: transparent; }}
   #fallback {{ display: none; color: #e06c75; font-size: 14px; padding: 12px; }}
-  .markmap svg {{ background: transparent; }}
+  .markmap svg {{ width: 100%; height: 620px; background: transparent; }}
 </style></head><body>
 <div class="markmap"><script type="text/template">
 {md}
@@ -52,6 +52,16 @@ def _load():
 def display_mindmap():
     st.markdown("## 🧠 项目思维导图")
     st.caption("宿主机每分钟检测项目变更并自动重建导图;本页每 60 秒自动刷新。")
+    with st.expander("📖 使用说明与图例", expanded=True):
+        st.markdown(
+            "- **图例**:📁 目录 = 物理结构;📦 分组节点 = 策略模块(逻辑分组);"
+            "`文件 — 中文说明` = 功能注解。\n"
+            "- **交互**:鼠标滚轮缩放;按住空白处拖拽平移;点击节点前的圆圈折叠/展开分支。\n"
+            "- **更新机制**:宿主机 cron 每分钟检测项目变更并自动重建导图;本页每 60 秒自动刷新;"
+            "项目改动最迟约 2 分钟内反映到图中。\n"
+            "- **指标**:生成时间(最近一次重建)、节点数(含分组节点)、最近变更文件数(上次重建检测到的变更)、"
+            "Git HEAD(当前代码版本)。"
+        )
 
     @st.fragment(run_every=60)
     def _render():

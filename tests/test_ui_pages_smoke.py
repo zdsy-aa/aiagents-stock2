@@ -85,3 +85,6 @@ def test_mindmap_page_renders():
     assert not at.exception, at.exception
     text = "\n".join(str(el.value) for el in at.markdown)
     assert "项目思维导图" in text
+    assert "更新机制" in text  # 使用说明 expander 内的正文
+    labels = [e.label for e in at.expander]
+    assert any("使用说明与图例" in l for l in labels)
