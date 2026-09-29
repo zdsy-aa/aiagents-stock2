@@ -5,29 +5,15 @@
 """
 import streamlit as st
 
-from monitor_manager import display_monitor_manager
 from main_force_ui import display_main_force_selector
 from sector_strategy_ui import display_sector_strategy
 from longhubang_ui import display_longhubang
-from smart_monitor_ui import smart_monitor_ui
 from news_flow_ui import display_news_flow_monitor
 from views.config_manager import display_config_manager
-from views.history import display_history_records
-from views.analysis_views import display_intraday_analysis
 
 
 def route_page() -> bool:
     """命中并渲染某页则返回 True；否则 False。"""
-    # 检查是否显示历史记录
-    if 'show_history' in st.session_state and st.session_state.show_history:
-        display_history_records()
-        return True
-
-    # 检查是否显示监测面板
-    if 'show_monitor' in st.session_state and st.session_state.show_monitor:
-        display_monitor_manager()
-        return True
-
     # 检查是否显示主力选股
     if 'show_main_force' in st.session_state and st.session_state.show_main_force:
         display_main_force_selector()
@@ -67,17 +53,6 @@ def route_page() -> bool:
         display_longhubang()
         return True
 
-    # 检查是否显示AI盯盘
-    if 'show_smart_monitor' in st.session_state and st.session_state.show_smart_monitor:
-        smart_monitor_ui()
-        return True
-
-    # 检查是否显示持仓分析
-    if 'show_portfolio' in st.session_state and st.session_state.show_portfolio:
-        from portfolio_ui import display_portfolio_manager
-        display_portfolio_manager()
-        return True
-
     # 检查是否显示新闻流量监测
     if 'show_news_flow' in st.session_state and st.session_state.show_news_flow:
         display_news_flow_monitor()
@@ -94,7 +69,19 @@ def route_page() -> bool:
         from macro_cycle_ui import display_macro_cycle
         display_macro_cycle()
         return True
-    
+
+    # 检查是否显示板块分析
+    if 'show_sector_detail' in st.session_state and st.session_state.show_sector_detail:
+        from sector_detail_ui import display_sector_detail
+        display_sector_detail()
+        return True
+
+    # 检查是否显示产业链分析
+    if 'show_industry_chain' in st.session_state and st.session_state.show_industry_chain:
+        from industry_chain_ui import display_industry_chain
+        display_industry_chain()
+        return True
+
     # 检查是否显示环境配置
     if 'show_config' in st.session_state and st.session_state.show_config:
         display_config_manager()
@@ -129,19 +116,31 @@ def route_page() -> bool:
         display_qizhang_predict()
         return True
 
-    if st.session_state.get('show_chanlun_chart'):
-        from chanlun_chart_ui import display_chanlun_chart
-        display_chanlun_chart()
-        return True
-
     # 检查是否显示「当前策略」只读总览页
     if 'show_current_strategy' in st.session_state and st.session_state.show_current_strategy:
         from current_strategy_ui import display_current_strategy
         display_current_strategy()
         return True
 
-    # 检查是否显示分时分析（放在所有 show_* 之后、默认日线主界面之前）
-    if 'show_intraday' in st.session_state and st.session_state.show_intraday:
-        display_intraday_analysis()
+    # 检查是否显示「文档」子页(指标/项目/流程/目录说明)
+    if st.session_state.get('show_docs_indicator'):
+        from views.docs_page import render_indicator_docs
+        render_indicator_docs()
+        return True
+    if st.session_state.get('show_docs_project'):
+        from views.docs_page import render_project_docs
+        render_project_docs()
+        return True
+    if st.session_state.get('show_docs_flow'):
+        from views.docs_page import render_flow_docs
+        render_flow_docs()
+        return True
+    if st.session_state.get('show_docs_scan'):
+        from views.docs_page import render_scan_docs
+        render_scan_docs()
+        return True
+    if st.session_state.get('show_mindmap'):
+        from mindmap_ui import display_mindmap
+        display_mindmap()
         return True
     return False

@@ -25,14 +25,18 @@ def test_learning_video_section_removed():
 import pytest
 
 PAGE_FLAGS = [
-    "show_history", "show_monitor", "show_main_force", "show_low_price_bull",
+    "show_main_force", "show_low_price_bull",
     "show_small_cap", "show_profit_growth", "show_value_stock", "show_sector_strategy",
-    "show_longhubang", "show_smart_monitor", "show_portfolio", "show_news_flow",
-    "show_macro_analysis", "show_macro_cycle", "show_config", "show_intraday",
+    "show_longhubang", "show_news_flow",
+    "show_macro_analysis", "show_macro_cycle", "show_config",
     "show_chanlun",
     "show_current_strategy",
     "show_qizhang",
-    "show_chanlun_chart",
+    "show_docs_indicator",
+    "show_docs_project",
+    "show_docs_flow",
+    "show_docs_scan",
+    "show_mindmap",
 ]
 
 
@@ -58,6 +62,26 @@ def test_current_strategy_page_shows_four_categories():
 def test_home_shows_top_nav_categories():
     at = AppTest.from_file("app.py", default_timeout=180).run()
     assert at.exception is None or at.exception == []
-    btn_labels = " ".join(b.label for b in at.button)
-    for cat in ("分析", "选股", "策略", "管理"):
-        assert cat in btn_labels
+    exp_labels = " ".join(e.label for e in at.sidebar.expander)
+    btn_labels = " ".join(b.label for b in at.sidebar.button)
+    for cat in ("分析", "选股", "策略", "配置", "文档"):
+        assert cat in exp_labels
+    # 管理模块已从网页删除
+    assert "管理" not in exp_labels
+    assert "持仓分析" not in btn_labels
+    assert "历史记录" not in btn_labels
+    # 已删除的分时分析/缠论图解不应出现
+    assert "分时分析" not in btn_labels
+    assert "缠论图解" not in btn_labels
+    # 保留页在侧栏可见
+    for lbl in ("股票分析-日", "主力选股", "环境配置"):
+        assert lbl in btn_labels
+
+
+def test_mindmap_page_renders():
+    at = AppTest.from_file("app.py", default_timeout=180)
+    at.session_state["show_mindmap"] = True
+    at.run()
+    assert not at.exception, at.exception
+    text = "\n".join(str(el.value) for el in at.markdown)
+    assert "项目思维导图" in text
