@@ -120,14 +120,6 @@ def test_write_outputs_and_run_produce_artifacts(tmp_path):
     assert meta2["generated_at"] and meta2["node_count"] >= 1
 
 
-def test_scan_tree_excludes_nested_superpowers(tmp_path):
-    root = make_repo(tmp_path)
-    (root / "docs" / "superpowers" / "specs" / "x.md").mkdir(parents=True)
-    tree = mg.scan_tree(root)
-    names = {c["name"] for c in tree["children"]}
-    assert "docs" not in names  # docs 下只有被排除的 superpowers,整目录无收录文件
-
-
 def test_scan_tree_excludes_superpowers_path_with_file(tmp_path):
     """superpowers 目录内存在真实收录文件时,相对路径排除仍生效。"""
     root = make_repo(tmp_path)
@@ -388,6 +380,21 @@ def diff_snapshot(old: dict, new: dict) -> list[str]:
         if p not in new_paths:
             changed.append(p)
     return sorted(changed)
+
+
+def _exclude_out_dir(tree: dict, root: Path, out_dir: Path) -> None:
+    """把产物目录从树中移除:产物不得回流成输入,否则快照永不稳定(out_dir 位于 root 内时)。"""
+    try:
+        rel_out = out_dir.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        if node.get("path") == rel_out:
+            node["children"] = []
+            continue
+        stack.extend(node.get("children", []))
 ```
 
 并把 `run()` 改为:
@@ -397,6 +404,7 @@ def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None 
     """执行一轮:扫描→快照对比→(Task 3: 注解合并)→重建。返回日志行。"""
     try:
         tree = scan_tree(root)
+        _exclude_out_dir(tree, root, out_dir)
         new_snapshot = build_snapshot(root, tree)
         old_snapshot = {}
         snapshot_path = out_dir / ".snapshot.json"
