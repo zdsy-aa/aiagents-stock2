@@ -770,7 +770,7 @@ Expected: project_map.md / meta.json / .snapshot.json / sync.log 存在;首行�
 ```bash
 cd /home/tdxback/aiagents-stock
 git add tools/mindmap_annotations.json docs/superpowers/specs/2026-09-29-project-mindmap-design.md
-git commit -m "feat: 思维导图初版注解(20 逻辑分组+40 文件说明);spec 注解格式 yaml→json
+git commit -m "feat: 思维导图初版注解(19 逻辑分组+33 文件说明);spec 注解格式 yaml→json
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```

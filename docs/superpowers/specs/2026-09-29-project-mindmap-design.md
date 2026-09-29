@@ -50,6 +50,7 @@
 - 排除:`.git`、`__pycache__`、`*.pyc`、`*.log`、`*.log.*`、`*.bak`、`*.pybak`、`data/`、`tdx-data/`、`pgdata/`、`venv`、`venv-data`、`.pytest_cache`、`docs/superpowers`。
 - 收录文件类型:`.py`、`.md`、`.sh`、`.yml`、`.yaml`、`.json`、`Dockerfile`、`.txt`、`.js`、`.go`。
 - 导图骨架 = 物理目录树;注解可把相关文件挂到「逻辑分组」节点下(见 3.4)。
+- 深度上限:超过 6 层的目录不展开(MAX_DEPTH=6,项目实际深度 ≤5)。
 
 ### 3.4 注解合并(`tools/mindmap_annotations.json`)
 
@@ -61,7 +62,7 @@
 格式为 JSON 而非 yaml:保持生成器纯 stdlib(宿主 venv-data 无 PyYAML)。
 
 - 文件注解:节点文本 = `文件名 — 说明`。
-- 目录/虚拟分组注解:允许为目录节点加说明;允许 `groups` 区把零散顶层文件归入逻辑分组(如 `缠论*` → 「缠论选股」),分组节点渲染为导图分支。
+- 目录/虚拟分组注解:允许为文件节点加说明;允许 `groups` 区把零散顶层文件归入逻辑分组(如 chanlun_* 系列文件 → 「缠论选股」),分组节点渲染为导图分支。
 - 注解文件不存在时:静默跳过(可选配置缺失不是错误),不影响整体生成。
 
 ### 3.5 产物格式
