@@ -118,6 +118,31 @@ def test_write_outputs_and_run_produce_artifacts(tmp_path):
     assert result.startswith("rebuilt")
     meta2 = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
     assert meta2["generated_at"] and meta2["node_count"] >= 1
+
+
+def test_scan_tree_excludes_nested_superpowers(tmp_path):
+    root = make_repo(tmp_path)
+    (root / "docs" / "superpowers" / "specs" / "x.md").mkdir(parents=True)
+    tree = mg.scan_tree(root)
+    names = {c["name"] for c in tree["children"]}
+    assert "docs" not in names  # docs 下只有被排除的 superpowers,整目录无收录文件
+
+
+def test_scan_tree_excludes_superpowers_path_with_file(tmp_path):
+    """superpowers 目录内存在真实收录文件时,相对路径排除仍生效。"""
+    root = make_repo(tmp_path)
+    (root / "docs" / "superpowers" / "specs").mkdir(parents=True)
+    (root / "docs" / "superpowers" / "specs" / "x.md").write_text("# x")
+    tree = mg.scan_tree(root)
+    assert "docs" not in {c["name"] for c in tree["children"]}
+
+
+def test_run_errors_return_error_line(tmp_path, monkeypatch):
+    def boom(root):
+        raise OSError("disk on fire")
+    monkeypatch.setattr(mg, "scan_tree", boom)
+    result = mg.run(tmp_path, tmp_path / "out", annot_path=tmp_path / "nope.json")
+    assert result.startswith("error:")
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -173,7 +198,8 @@ def scan_tree(root: Path) -> dict:
             if entry.is_symlink():
                 continue
             if entry.is_dir():
-                if entry.name in EXCLUDE_DIRS or entry.name.startswith("."):
+                rel_entry = f"{rel}/{entry.name}" if rel else entry.name
+                if rel_entry in EXCLUDE_DIRS or entry.name.startswith("."):
                     continue
                 if depth >= MAX_DEPTH:
                     continue
@@ -221,22 +247,25 @@ def write_outputs(out_dir: Path, md: str, meta: dict) -> None:
 
 def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None = None) -> str:
     """执行一轮:扫描→(Task 2: 快照对比;Task 3: 注解合并)→重建。返回日志行。"""
-    tree = scan_tree(root)
-    md = render_markdown(tree)
     try:
-        git_head = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, timeout=10
-        ).stdout.decode().strip()
-    except Exception:
-        git_head = ""
-    meta = {
-        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "node_count": count_nodes(tree),
-        "changed_files": [],
-        "git_head": git_head,
-    }
-    write_outputs(out_dir, md, meta)
-    return "rebuilt"
+        tree = scan_tree(root)
+        md = render_markdown(tree)
+        try:
+            git_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, timeout=10
+            ).stdout.decode().strip()
+        except Exception:
+            git_head = ""
+        meta = {
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "node_count": count_nodes(tree),
+            "changed_files": [],
+            "git_head": git_head,
+        }
+        write_outputs(out_dir, md, meta)
+        return "rebuilt"
+    except Exception as e:
+        return f"error: {e!r}"
 
 
 def main() -> None:
@@ -366,34 +395,37 @@ def diff_snapshot(old: dict, new: dict) -> list[str]:
 ```python
 def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None = None) -> str:
     """执行一轮:扫描→快照对比→(Task 3: 注解合并)→重建。返回日志行。"""
-    tree = scan_tree(root)
-    new_snapshot = build_snapshot(root, tree)
-    old_snapshot = {}
-    snapshot_path = out_dir / ".snapshot.json"
-    if snapshot_path.exists():
-        try:
-            old_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            old_snapshot = {}
-    changed = diff_snapshot(old_snapshot, new_snapshot)
-    if not force and old_snapshot.get("paths") and not changed:
-        return "unchanged"
-    md = render_markdown(tree)
     try:
-        git_head = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, timeout=10
-        ).stdout.decode().strip()
-    except Exception:
-        git_head = ""
-    meta = {
-        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "node_count": count_nodes(tree),
-        "changed_files": changed,
-        "git_head": git_head,
-    }
-    write_outputs(out_dir, md, meta)
-    _atomic_write(snapshot_path, json.dumps(new_snapshot, ensure_ascii=False, indent=2))
-    return f"rebuilt ({len(changed)} changed)"
+        tree = scan_tree(root)
+        new_snapshot = build_snapshot(root, tree)
+        old_snapshot = {}
+        snapshot_path = out_dir / ".snapshot.json"
+        if snapshot_path.exists():
+            try:
+                old_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                old_snapshot = {}
+        changed = diff_snapshot(old_snapshot, new_snapshot)
+        if not force and old_snapshot.get("paths") and not changed:
+            return "unchanged"
+        md = render_markdown(tree)
+        try:
+            git_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, timeout=10
+            ).stdout.decode().strip()
+        except Exception:
+            git_head = ""
+        meta = {
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "node_count": count_nodes(tree),
+            "changed_files": changed,
+            "git_head": git_head,
+        }
+        write_outputs(out_dir, md, meta)
+        _atomic_write(snapshot_path, json.dumps(new_snapshot, ensure_ascii=False, indent=2))
+        return f"rebuilt ({len(changed)} changed)"
+    except Exception as e:
+        return f"error: {e!r}"
 ```
 
 - [ ] **Step 4: 运行确认通过**
