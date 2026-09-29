@@ -69,3 +69,28 @@ def test_write_outputs_and_run_produce_artifacts(tmp_path):
     assert result.startswith("rebuilt")
     meta2 = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
     assert meta2["generated_at"] and meta2["node_count"] >= 1
+
+
+def test_scan_tree_excludes_nested_superpowers(tmp_path):
+    root = make_repo(tmp_path)
+    (root / "docs" / "superpowers" / "specs" / "x.md").mkdir(parents=True)
+    tree = mg.scan_tree(root)
+    names = {c["name"] for c in tree["children"]}
+    assert "docs" not in names  # docs 下只有被排除的 superpowers,整目录无收录文件
+
+
+def test_scan_tree_excludes_superpowers_path_with_file(tmp_path):
+    """superpowers 目录内存在真实收录文件时,相对路径排除仍生效。"""
+    root = make_repo(tmp_path)
+    (root / "docs" / "superpowers" / "specs").mkdir(parents=True)
+    (root / "docs" / "superpowers" / "specs" / "x.md").write_text("# x")
+    tree = mg.scan_tree(root)
+    assert "docs" not in {c["name"] for c in tree["children"]}
+
+
+def test_run_errors_return_error_line(tmp_path, monkeypatch):
+    def boom(root):
+        raise OSError("disk on fire")
+    monkeypatch.setattr(mg, "scan_tree", boom)
+    result = mg.run(tmp_path, tmp_path / "out", annot_path=tmp_path / "nope.json")
+    assert result.startswith("error:")

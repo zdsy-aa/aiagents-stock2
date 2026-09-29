@@ -41,7 +41,8 @@ def scan_tree(root: Path) -> dict:
             if entry.is_symlink():
                 continue
             if entry.is_dir():
-                if entry.name in EXCLUDE_DIRS or entry.name.startswith("."):
+                rel_entry = f"{rel}/{entry.name}" if rel else entry.name
+                if rel_entry in EXCLUDE_DIRS or entry.name.startswith("."):
                     continue
                 if depth >= MAX_DEPTH:
                     continue
@@ -89,22 +90,25 @@ def write_outputs(out_dir: Path, md: str, meta: dict) -> None:
 
 def run(root: Path, out_dir: Path, force: bool = False, annot_path: Path | None = None) -> str:
     """执行一轮:扫描→(Task 2: 快照对比;Task 3: 注解合并)→重建。返回日志行。"""
-    tree = scan_tree(root)
-    md = render_markdown(tree)
     try:
-        git_head = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, timeout=10
-        ).stdout.decode().strip()
-    except Exception:
-        git_head = ""
-    meta = {
-        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "node_count": count_nodes(tree),
-        "changed_files": [],
-        "git_head": git_head,
-    }
-    write_outputs(out_dir, md, meta)
-    return "rebuilt"
+        tree = scan_tree(root)
+        md = render_markdown(tree)
+        try:
+            git_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, timeout=10
+            ).stdout.decode().strip()
+        except Exception:
+            git_head = ""
+        meta = {
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "node_count": count_nodes(tree),
+            "changed_files": [],
+            "git_head": git_head,
+        }
+        write_outputs(out_dir, md, meta)
+        return "rebuilt"
+    except Exception as e:
+        return f"error: {e!r}"
 
 
 def main() -> None:
